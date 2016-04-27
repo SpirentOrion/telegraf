@@ -1,9 +1,12 @@
+github.com/SpirentOrion/cloud-stress c5717c9f0f43aa4108e96ccfb80a8d2ca69309fb
 github.com/davecgh/go-spew 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
 github.com/gobwas/glob d877f6352135181470c40c73ebb81aefa22115fa
+github.com/golang/protobuf 552c7b9542c194800fd493123b3798ef0a832032
 github.com/influxdata/config b79f6829346b8d6e78ba73544b1e1038f1f1c9da
 github.com/influxdata/influxdb 21db76b3374c733f37ed16ad93f3484020034351
 github.com/influxdata/toml af4df43894b16e3fd2b788d01bd27ad0776ef2d0
 github.com/naoina/go-stringutil 6b638e95a32d0c1131db0e7fe83775cbea4a0d0b
+github.com/pebbe/zmq4 2eb538bccbf57df96ce23863cf49d68181d5c711
 github.com/pmezard/go-difflib 792786c7400a136282c1664665ae0a8db921c6c2
 github.com/stretchr/objx 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 github.com/stretchr/testify 1f4a1643a57e798696635ea4c126e9127adb7d3c
