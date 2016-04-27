@@ -7,10 +7,10 @@ PATH := $(subst :,/bin:,$(GOPATH))/bin:$(PATH)
 endif
 
 # Standard Telegraf build
-default: prepare build
+default: build
 
 # Windows build
-windows: prepare-windows build-windows
+windows: build-windows
 
 # Only run the build (no dependency grabbing)
 build:
