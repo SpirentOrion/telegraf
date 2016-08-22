@@ -1,5 +1,5 @@
 github.com/SpirentOrion/cloud-stress 6e6afe782164fd921a677837f10b8165c40d8481
-github.com/SpirentOrion/metrics-service 6a8c27ddd119a9168bde88f5ca7630808f2c360c
+github.com/SpirentOrion/metrics-service e12ec20648d5b1eb09cbe681c247d4a190442cd9
 github.com/gobwas/glob d877f6352135181470c40c73ebb81aefa22115fa
 github.com/golang/protobuf 0c1f6d65b5a189c2250d10e71a5506f06f9fa0a0
 github.com/influxdata/config b79f6829346b8d6e78ba73544b1e1038f1f1c9da
