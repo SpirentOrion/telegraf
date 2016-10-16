@@ -13,7 +13,9 @@ default: build
 windows: build-windows
 
 # Only run the build (no dependency grabbing)
+
 build:
+	cd proto && $(MAKE)
 	go install -ldflags "-X main.Version=$(VERSION)" ./...
 
 build-windows:

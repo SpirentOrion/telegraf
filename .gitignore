@@ -4,3 +4,4 @@ tivan
 .idea
 *~
 *#
+/proto/*/*.pb.go

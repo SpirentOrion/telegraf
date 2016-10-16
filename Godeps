@@ -1,7 +1,9 @@
 github.com/SpirentOrion/metrics-service f4b8e622e8fb422f16c8a3dd7a0a25fb7637570a
 github.com/gobwas/glob d877f6352135181470c40c73ebb81aefa22115fa
+github.com/golang/protobuf 1f49d83d9aa00e6ce4fc8258c71cc7786aec968a
 github.com/influxdata/config b79f6829346b8d6e78ba73544b1e1038f1f1c9da
 github.com/influxdata/influxdb 6e0c5698c1dc33064a1aeb59d0caf8fa88c2edb8
 github.com/influxdata/toml af4df43894b16e3fd2b788d01bd27ad0776ef2d0
 github.com/naoina/go-stringutil 6b638e95a32d0c1131db0e7fe83775cbea4a0d0b
-github.com/stretchr/testify 1f4a1643a57e798696635ea4c126e9127adb7d3c
+github.com/pebbe/zmq4 918dc0cde6ccf7e1068859fc62963f6f05087478
+github.com/stretchr/testify c5d7a69bf8a2c9c374798160849c071093e41dd1
