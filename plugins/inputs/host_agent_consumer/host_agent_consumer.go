@@ -1,6 +1,7 @@
 package host_agent_consumer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -17,12 +18,20 @@ import (
 type HostAgent struct {
 	sync.Mutex
 
+	mapMut sync.RWMutex
+	uuidMap map[string]string
+
 	SubscriberPort int
+	MapperPort int
 
 	subscriber *zmq.Socket
+	mapper *zmq.Socket
 
 	msgs chan []string
 	done chan struct{}
+
+	mapBytes chan []byte
+	mapDone chan struct{}
 
 	acc telegraf.Accumulator
 
@@ -34,6 +43,7 @@ type HostAgent struct {
 var sampleConfig = `
   ## host agent subscriber port
   subscriberPort = 40003
+  mapperPort = 9199
 `
 
 func (h *HostAgent) SampleConfig() string {
@@ -52,6 +62,12 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 
 	h.msgs = make(chan []string)
 	h.done = make(chan struct{})
+	h.mapBytes = make(chan []byte)
+	h.mapDone = make(chan struct{})
+
+	h.mapMut.Lock()
+	h.uuidMap = make(map[string]string)
+	h.mapMut.Unlock()
 
 	h.prevTime = time.Now()
 	h.prevValue = 0
@@ -63,6 +79,12 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	// Start the zmq message subscriber
 	go h.subscribe()
 
+	h.mapper, _ = zmq.NewSocket(zmq.PULL)
+	h.mapper.Bind("tcp://*:" + strconv.Itoa(h.MapperPort))
+
+	// Start the control listener
+	go h.handleMapper()
+
 	log.Printf("Started the host agent consumer service. Subscribing on *:%d\n", h.SubscriberPort)
 
 	return nil
@@ -73,9 +95,14 @@ func (h *HostAgent) Stop() {
 	defer h.Unlock()
 
 	close(h.done)
+	close(h.mapDone)
 	log.Printf("Stopping the host agent consumer service\n")
 	if err := h.subscriber.Close(); err != nil {
 		log.Printf("Error closing host agent consumer service: %s\n", err.Error())
+	}
+	log.Println("Stopping the host agent consumer service mapping port")
+	if err := h.mapper.Close(); err != nil {
+		log.Printf("Error closing host agent consumer service mapping port: %s\n", err.Error())
 	}
 }
 
@@ -95,8 +122,8 @@ func (h *HostAgent) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
-// subscribe() reads all incoming messages from the host agents, and parses them into
-// influxdb metric points.
+// subscribe() reads all incoming messages from the host agents, and parses
+// them into influxdb metric points.
 func (h *HostAgent) subscribe() {
 	go h.processMessages()
 	for {
@@ -138,10 +165,65 @@ func (h *HostAgent) processMessages() {
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
 					}
+					// At this point, check whether this set of tags has
+					// libvirt_uuid and instance_name. Only fill it if
+					// instance_name matches
+					uuid := dimensions["libvirt_uuid"]
+					iName := dimensions["instance_name"]
+					if uuid != "" && iName == "" {
+						h.mapMut.RLock()
+						iName = h.uuidMap[uuid]
+						if iName != "" {
+							dimensions["instance_name"] = iName
+						}
+						h.mapMut.RUnlock()
+					}
+
 					h.acc.AddFields(*metric.Name, values, dimensions, time.Unix(0, *metric.Timestamp))
 					h.currValue++
 				}
 			}(msg)
+		}
+	}
+}
+
+
+func (h *HostAgent) handleMapper() {
+	log.Println("Starting mapping listener at port:", h.MapperPort)
+	go h.processMapping()
+	for {
+		bytes, err := h.mapper.RecvBytes(0)
+		if err != nil {
+			break
+		} else {
+			log.Println("Processing", len(bytes), "from listener")
+			h.mapBytes <- bytes
+		}
+	}
+	log.Println("Mapping listener exited")
+}
+
+func (h *HostAgent) processMapping() {
+	for {
+		select {
+		case <-h.mapDone:
+			return
+		case mapBytes := <-h.mapBytes:
+			go func(bytes []byte) {
+				mapData := make(map[string]interface{})
+				log.Println("unmarshalling", bytes)
+				if err := json.Unmarshal(bytes, &mapData); err != nil {
+					log.Fatal("map unmarshalling error:", err)
+				}
+				log.Println("Received mapping information:", mapData)
+				if len(mapData) > 0 {
+					h.mapMut.Lock()
+					for k, v := range mapData {
+						h.uuidMap[k] = v.(string)
+					}
+					h.mapMut.Unlock()
+				}
+			}(mapBytes)
 		}
 	}
 }
