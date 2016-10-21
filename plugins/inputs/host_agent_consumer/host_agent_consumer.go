@@ -1,8 +1,10 @@
 package host_agent_consumer
 
 import (
-	"fmt"
+	"bufio"
+	"encoding/json"
 	"log"
+	"os/exec"
 	"strconv"
 	"sync"
 	"time"
@@ -18,11 +20,18 @@ type HostAgent struct {
 	sync.Mutex
 
 	SubscriberPort int
+	CloudAuthUrl string
+	CloudUser string
+	CloudPassword string
+	CloudTenant string
+	CloudProvider string
 
 	subscriber *zmq.Socket
 
 	msgs chan []string
 	done chan struct{}
+
+	cloudInstances map[string]CloudInstance
 
 	acc telegraf.Accumulator
 
@@ -31,9 +40,28 @@ type HostAgent struct {
 	currValue int64
 }
 
+type CloudInstances struct {
+	Instances []CloudInstance `json:"instances,required"`
+}
+
+type CloudInstance struct {
+	Id             string   `json:"id,required"`
+	Name           string   `json:"name,required"`
+}
+
 var sampleConfig = `
   ## host agent subscriber port
   subscriberPort = 40003
+  ## cloud Auth URL string
+  cloudAuthUrl = "http://10.140.88.10:5000"
+  ## cloud user name
+  cloudUser = "admin"
+  ## cloud password
+  cloudPassword = "dc7b19ac604e4e4f"
+  ## cloud tenant
+  cloudTenant = "admin"
+  ## cloud type
+  cloudProvider = "openstack"
 `
 
 func (h *HostAgent) SampleConfig() string {
@@ -53,12 +81,17 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.msgs = make(chan []string)
 	h.done = make(chan struct{})
 
+	h.cloudInstances = make(map[string]CloudInstance)
+
 	h.prevTime = time.Now()
 	h.prevValue = 0
 
 	h.subscriber, _ = zmq.NewSocket(zmq.SUB)
 	h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
 	h.subscriber.SetSubscribe("")
+
+	// Initialize Cloud Names
+	h.initCloudNames()
 
 	// Start the zmq message subscriber
 	go h.subscribe()
@@ -91,7 +124,7 @@ func (h *HostAgent) Gather(acc telegraf.Accumulator) error {
 	}
 
 	rate := float64(diffValue) / float64(diffTime)
-	fmt.Printf("Processed %f host agent metrics per second\n", rate)
+	log.Printf("Processed %f host agent metrics per second\n", rate)
 	return nil
 }
 
@@ -137,12 +170,56 @@ func (h *HostAgent) processMessages() {
 					dimensions := make(map[string]string)
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
+						if *metric.Name == "host_proc_metrics" ||
+							*metric.Name == "libvirt_domain_metrics" ||
+							*metric.Name == "libvirt_domain_block_metrics" ||
+							*metric.Name == "libvirt_domain_interface_metrics" {
+							if *d.Name == "libvirt_uuid" {
+								cloudInstance, ok := h.cloudInstances[*d.Value]
+								if ok {
+									dimensions["instance_name"] = cloudInstance.Name
+								}
+							}
+						}
 					}
 					h.acc.AddFields(*metric.Name, values, dimensions, time.Unix(0, *metric.Timestamp))
 					h.currValue++
 				}
 			}(msg)
 		}
+	}
+}
+
+func (h *HostAgent) initCloudNames() {
+	cmd := exec.Command("./glimpse",
+		"-auth-url", h.CloudAuthUrl,
+		"-user", h.CloudUser,
+		"-pass", h.CloudPassword,
+		"-tenant", h.CloudTenant,
+		"-provider", h.CloudProvider,
+		"list", "instances")
+
+	cmdReader, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error creating StdoutPipe: %s", err.Error())
+		return
+	}
+	// read the data from stdout
+	buf := bufio.NewReader(cmdReader)
+
+	err = cmd.Start()
+	if err != nil {
+		log.Printf("Error starting glimpse: %s", err.Error())
+		return
+	}
+
+	output, _ := buf.ReadString('\n')
+
+	var instances CloudInstances
+	json.Unmarshal([]byte(output), &instances)
+
+	for _, instance := range instances.Instances {
+		h.cloudInstances[instance.Id] = instance
 	}
 }
 
