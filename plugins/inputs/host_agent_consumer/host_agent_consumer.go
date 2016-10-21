@@ -53,15 +53,15 @@ var sampleConfig = `
   ## host agent subscriber port
   subscriberPort = 40003
   ## cloud Auth URL string
-  cloudAuthUrl = "http://10.140.88.10:5000"
+  cloudAuthUrl = ""
   ## cloud user name
-  cloudUser = "admin"
+  cloudUser = ""
   ## cloud password
-  cloudPassword = "dc7b19ac604e4e4f"
+  cloudPassword = ""
   ## cloud tenant
-  cloudTenant = "admin"
+  cloudTenant = ""
   ## cloud type
-  cloudProvider = "openstack"
+  cloudProvider = ""
 `
 
 func (h *HostAgent) SampleConfig() string {
