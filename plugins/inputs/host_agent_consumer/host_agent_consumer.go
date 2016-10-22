@@ -239,7 +239,7 @@ func (h *HostAgent) handleMapper() {
 		if err != nil {
 			break
 		} else {
-			log.Println("Processing", len(bytes), "from listener")
+			log.Println("Processing", len(bytes), " bytes from listener")
 			h.mapBytes <- bytes
 		}
 	}
@@ -254,7 +254,6 @@ func (h *HostAgent) processMapping() {
 		case mapBytes := <-h.mapBytes:
 			go func(bytes []byte) {
 				mapData := make(map[string]interface{})
-				log.Println("unmarshalling", bytes)
 				if err := json.Unmarshal(bytes, &mapData); err != nil {
 					log.Fatal("map unmarshalling error:", err)
 				}
