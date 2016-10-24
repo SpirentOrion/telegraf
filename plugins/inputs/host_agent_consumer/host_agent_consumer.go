@@ -20,18 +20,19 @@ type HostAgent struct {
 	sync.Mutex
 
 	SubscriberPort int
-	CloudAuthUrl string
-	CloudUser string
-	CloudPassword string
-	CloudTenant string
-	CloudProvider string
+	CloudAuthUrl   string
+	CloudUser      string
+	CloudPassword  string
+	CloudTenant    string
+	CloudProvider  string
 
 	subscriber *zmq.Socket
 
 	msgs chan []string
 	done chan struct{}
 
-	cloudInstances map[string]CloudInstance
+	cloudInstances    map[string]CloudInstance
+	cloudNetworkPorts map[string]CloudNetworkPort
 
 	acc telegraf.Accumulator
 
@@ -45,8 +46,17 @@ type CloudInstances struct {
 }
 
 type CloudInstance struct {
-	Id             string   `json:"id,required"`
-	Name           string   `json:"name,required"`
+	Id   string `json:"id,required"`
+	Name string `json:"name,required"`
+}
+
+type CloudNetworkPorts struct {
+	NetworkPorts []CloudNetworkPort `json:"network_ports,required"`
+}
+
+type CloudNetworkPort struct {
+	MacAddress  string `json:"mac_address,required"`
+	NetworkName string `json:"network_name,required"`
 }
 
 var sampleConfig = `
@@ -81,8 +91,6 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.msgs = make(chan []string)
 	h.done = make(chan struct{})
 
-	h.cloudInstances = make(map[string]CloudInstance)
-
 	h.prevTime = time.Now()
 	h.prevValue = 0
 
@@ -90,8 +98,11 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
 	h.subscriber.SetSubscribe("")
 
-	// Initialize Cloud Names
-	h.initCloudNames()
+	// Initialize Cloud Instances
+	h.loadCloudInstances()
+
+	// Initialize Cloud Network Ports
+	h.loadCloudNetworkPorts()
 
 	// Start the zmq message subscriber
 	go h.subscribe()
@@ -174,10 +185,34 @@ func (h *HostAgent) processMessages() {
 							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "libvirt_domain_block_metrics" ||
 							*metric.Name == "libvirt_domain_interface_metrics" {
-							if *d.Name == "libvirt_uuid" {
+							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {
 									dimensions["instance_name"] = cloudInstance.Name
+								} else {
+									// reload cloud instances - looks like new instance was instantiated
+									h.loadCloudInstances()
+									cloudInstance, ok := h.cloudInstances[*d.Value]
+									if ok {
+										dimensions["instance_name"] = cloudInstance.Name
+									} else {
+										dimensions["instance_name"] = "unknown"
+									}
+								}
+							}
+							if *d.Name == "mac_addr" {
+								networkPort, ok := h.cloudNetworkPorts[*d.Value]
+								if ok {
+									dimensions["network_name"] = networkPort.NetworkName
+								} else {
+									// reload cloud network ports - looks like new network was instantiated
+									h.loadCloudNetworkPorts()
+									networkPort, ok := h.cloudNetworkPorts[*d.Value]
+									if ok {
+										dimensions["network_name"] = networkPort.NetworkName
+									} else {
+										dimensions["network_name"] = "unknown"
+									}
 								}
 							}
 						}
@@ -190,7 +225,7 @@ func (h *HostAgent) processMessages() {
 	}
 }
 
-func (h *HostAgent) initCloudNames() {
+func (h *HostAgent) loadCloudInstances() {
 	cmd := exec.Command("./glimpse",
 		"-auth-url", h.CloudAuthUrl,
 		"-user", h.CloudUser,
@@ -201,7 +236,7 @@ func (h *HostAgent) initCloudNames() {
 
 	cmdReader, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("Error creating StdoutPipe: %s", err.Error())
+		log.Printf("Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
 		return
 	}
 	// read the data from stdout
@@ -209,17 +244,58 @@ func (h *HostAgent) initCloudNames() {
 
 	err = cmd.Start()
 	if err != nil {
-		log.Printf("Error starting glimpse: %s", err.Error())
+		log.Printf("Error starting glimpse to list instances: %s", err.Error())
 		return
 	}
 
 	output, _ := buf.ReadString('\n')
 
+	cmd.Process.Kill()
+	cmd.Wait()
+
 	var instances CloudInstances
 	json.Unmarshal([]byte(output), &instances)
 
+	h.cloudInstances = make(map[string]CloudInstance)
 	for _, instance := range instances.Instances {
 		h.cloudInstances[instance.Id] = instance
+	}
+}
+
+func (h *HostAgent) loadCloudNetworkPorts() {
+	cmd := exec.Command("./glimpse",
+		"-auth-url", h.CloudAuthUrl,
+		"-user", h.CloudUser,
+		"-pass", h.CloudPassword,
+		"-tenant", h.CloudTenant,
+		"-provider", h.CloudProvider,
+		"list", "network-ports")
+
+	cmdReader, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
+		return
+	}
+	// read the data from stdout
+	buf := bufio.NewReader(cmdReader)
+
+	err = cmd.Start()
+	if err != nil {
+		log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
+		return
+	}
+
+	output, _ := buf.ReadString('\n')
+
+	cmd.Process.Kill()
+	cmd.Wait()
+
+	var networkPorts CloudNetworkPorts
+	json.Unmarshal([]byte(output), &networkPorts)
+
+	h.cloudNetworkPorts = make(map[string]CloudNetworkPort)
+	for _, networkPort := range networkPorts.NetworkPorts {
+		h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
 	}
 }
 
