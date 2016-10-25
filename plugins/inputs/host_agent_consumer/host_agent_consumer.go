@@ -280,6 +280,8 @@ func (h *HostAgent) loadCloudInstances() {
 }
 
 func (h *HostAgent) loadCloudInstance(instanceId string) {
+	h.Lock()
+	defer h.Unlock()
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
@@ -316,6 +318,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			json.Unmarshal([]byte(output), &instances)
 
 			for _, instance := range instances.Instances {
+				log.Printf("Adding new instance name for instance id %s - instance name = %s", instanceId, instance.Name)
 				h.cloudInstances[instance.Id] = instance
 			}
 		}
