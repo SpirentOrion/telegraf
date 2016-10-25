@@ -16,6 +16,14 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
+type CloudProvider struct {
+	CloudAuthUrl  string
+	CloudUser     string
+	CloudPassword string
+	CloudTenant   string
+	CloudType     string
+}
+
 type HostAgent struct {
 	sync.Mutex
 
@@ -23,12 +31,8 @@ type HostAgent struct {
 	uuidMap map[string]string
 
 	SubscriberPort int
+	CloudProviders []CloudProvider
 	MapperPort int
-	CloudAuthUrl string
-	CloudUser string
-	CloudPassword string
-	CloudTenant string
-	CloudProvider string
 
 	subscriber *zmq.Socket
 	mapper *zmq.Socket
@@ -40,6 +44,7 @@ type HostAgent struct {
 	mapDone chan struct{}
 
 	cloudInstances map[string]CloudInstance
+	cloudNetworkPorts map[string]CloudNetworkPort
 
 	acc telegraf.Accumulator
 
@@ -53,8 +58,17 @@ type CloudInstances struct {
 }
 
 type CloudInstance struct {
-	Id             string   `json:"id,required"`
-	Name           string   `json:"name,required"`
+	Id   string `json:"id,required"`
+	Name string `json:"name,required"`
+}
+
+type CloudNetworkPorts struct {
+	NetworkPorts []CloudNetworkPort `json:"network_ports,required"`
+}
+
+type CloudNetworkPort struct {
+	MacAddress  string `json:"mac_address,required"`
+	NetworkName string `json:"network_name,required"`
 }
 
 var sampleConfig = `
@@ -97,8 +111,6 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.uuidMap = make(map[string]string)
 	h.mapMut.Unlock()
 
-	h.cloudInstances = make(map[string]CloudInstance)
-
 	h.prevTime = time.Now()
 	h.prevValue = 0
 
@@ -106,8 +118,11 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
 	h.subscriber.SetSubscribe("")
 
-	// Initialize Cloud Names
-	h.initCloudNames()
+	// Initialize Cloud Instances
+	h.loadCloudInstances()
+
+	// Initialize Cloud Network Ports
+	h.loadCloudNetworkPorts()
 
 	// Start the zmq message subscriber
 	go h.subscribe()
@@ -201,10 +216,34 @@ func (h *HostAgent) processMessages() {
 							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "libvirt_domain_block_metrics" ||
 							*metric.Name == "libvirt_domain_interface_metrics" {
-							if *d.Name == "libvirt_uuid" {
+							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {
 									dimensions["instance_name"] = cloudInstance.Name
+								} else {
+									// reload cloud instances - looks like new instance was instantiated
+									h.loadCloudInstances()
+									cloudInstance, ok := h.cloudInstances[*d.Value]
+									if ok {
+										dimensions["instance_name"] = cloudInstance.Name
+									} else {
+										dimensions["instance_name"] = "unknown"
+									}
+								}
+							}
+							if *d.Name == "mac_addr" {
+								networkPort, ok := h.cloudNetworkPorts[*d.Value]
+								if ok {
+									dimensions["network_name"] = networkPort.NetworkName
+								} else {
+									// reload cloud network ports - looks like new network was instantiated
+									h.loadCloudNetworkPorts()
+									networkPort, ok := h.cloudNetworkPorts[*d.Value]
+									if ok {
+										dimensions["network_name"] = networkPort.NetworkName
+									} else {
+										dimensions["network_name"] = "unknown"
+									}
 								}
 							}
 						}
@@ -270,36 +309,81 @@ func (h *HostAgent) processMapping() {
 	}
 }
 
-func (h *HostAgent) initCloudNames() {
-	cmd := exec.Command("./glimpse",
-		"-auth-url", h.CloudAuthUrl,
-		"-user", h.CloudUser,
-		"-pass", h.CloudPassword,
-		"-tenant", h.CloudTenant,
-		"-provider", h.CloudProvider,
-		"list", "instances")
+func (h *HostAgent) loadCloudInstances() {
+	h.cloudInstances = make(map[string]CloudInstance)
+	for _, c := range h.CloudProviders {
+		cmd := exec.Command("./glimpse",
+			"-auth-url", c.CloudAuthUrl,
+			"-user", c.CloudUser,
+			"-pass", c.CloudPassword,
+			"-tenant", c.CloudTenant,
+			"-provider", c.CloudType,
+			"list", "instances")
 
-	cmdReader, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("Error creating StdoutPipe: %s", err.Error())
-		return
+		cmdReader, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
+			return
+		}
+		// read the data from stdout
+		buf := bufio.NewReader(cmdReader)
+
+		err = cmd.Start()
+		if err != nil {
+			log.Printf("Error starting glimpse to list instances: %s", err.Error())
+			return
+		}
+
+		output, _ := buf.ReadString('\n')
+
+		cmd.Process.Kill()
+		cmd.Wait()
+
+		var instances CloudInstances
+		json.Unmarshal([]byte(output), &instances)
+
+		for _, instance := range instances.Instances {
+			h.cloudInstances[instance.Id] = instance
+		}
 	}
-	// read the data from stdout
-	buf := bufio.NewReader(cmdReader)
+}
 
-	err = cmd.Start()
-	if err != nil {
-		log.Printf("Error starting glimpse: %s", err.Error())
-		return
-	}
+func (h *HostAgent) loadCloudNetworkPorts() {
+	h.cloudNetworkPorts = make(map[string]CloudNetworkPort)
+	for _, c := range h.CloudProviders {
+		cmd := exec.Command("./glimpse",
+			"-auth-url", c.CloudAuthUrl,
+			"-user", c.CloudUser,
+			"-pass", c.CloudPassword,
+			"-tenant", c.CloudTenant,
+			"-provider", c.CloudType,
+			"list", "network-ports")
 
-	output, _ := buf.ReadString('\n')
+		cmdReader, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
+			return
+		}
+		// read the data from stdout
+		buf := bufio.NewReader(cmdReader)
 
-	var instances CloudInstances
-	json.Unmarshal([]byte(output), &instances)
+		err = cmd.Start()
+		if err != nil {
+			log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
+			return
+		}
 
-	for _, instance := range instances.Instances {
-		h.cloudInstances[instance.Id] = instance
+		output, _ := buf.ReadString('\n')
+
+		cmd.Process.Kill()
+		cmd.Wait()
+
+		var networkPorts CloudNetworkPorts
+		json.Unmarshal([]byte(output), &networkPorts)
+
+		for _, networkPort := range networkPorts.NetworkPorts {
+			h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
+		}
 	}
 }
 
