@@ -201,8 +201,8 @@ func (h *HostAgent) processMessages() {
 								if ok {
 									dimensions["instance_name"] = cloudInstance.Name
 								} else {
-									// reload cloud instances - looks like new instance was instantiated
-									h.loadCloudInstances()
+									// load cloud instance for missing instance
+									h.loadCloudInstance(*d.Value)
 									cloudInstance, ok := h.cloudInstances[*d.Value]
 									if ok {
 										dimensions["instance_name"] = cloudInstance.Name
@@ -260,6 +260,49 @@ func (h *HostAgent) loadCloudInstances() {
 			err = cmd.Start()
 			if err != nil {
 				log.Printf("Error starting glimpse to list instances: %s", err.Error())
+				h.CloudProviders[i].isValid = false
+				return
+			}
+
+			output, _ := buf.ReadString('\n')
+
+			cmd.Process.Kill()
+			cmd.Wait()
+
+			var instances CloudInstances
+			json.Unmarshal([]byte(output), &instances)
+
+			for _, instance := range instances.Instances {
+				h.cloudInstances[instance.Id] = instance
+			}
+		}
+	}
+}
+
+func (h *HostAgent) loadCloudInstance(instanceId string) {
+	for i, c := range h.CloudProviders {
+		if c.isValid {
+			cmd := exec.Command("./glimpse",
+				"-auth-url", c.CloudAuthUrl,
+				"-user", c.CloudUser,
+				"-pass", c.CloudPassword,
+				"-tenant", c.CloudTenant,
+				"-provider", c.CloudType,
+				"list", "instances",
+				"-inst-id", instanceId)
+
+			cmdReader, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Printf("Error creating StdoutPipe for glimpse to list instance %s: %s", instanceId, err.Error())
+				h.CloudProviders[i].isValid = false
+				return
+			}
+			// read the data from stdout
+			buf := bufio.NewReader(cmdReader)
+
+			err = cmd.Start()
+			if err != nil {
+				log.Printf("Error starting glimpse to list instance %s: %s", instanceId, err.Error())
 				h.CloudProviders[i].isValid = false
 				return
 			}
