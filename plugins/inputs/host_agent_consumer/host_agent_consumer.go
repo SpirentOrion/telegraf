@@ -16,14 +16,6 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
-type CloudProvider struct {
-	CloudAuthUrl  string
-	CloudUser     string
-	CloudPassword string
-	CloudTenant   string
-	CloudType     string
-}
-
 type HostAgent struct {
 	sync.Mutex
 
@@ -44,6 +36,15 @@ type HostAgent struct {
 	prevTime  time.Time
 	prevValue int64
 	currValue int64
+}
+
+type CloudProvider struct {
+	CloudAuthUrl  string
+	CloudUser     string
+	CloudPassword string
+	CloudTenant   string
+	CloudType     string
+	isValid       bool
 }
 
 type CloudInstances struct {
@@ -67,16 +68,17 @@ type CloudNetworkPort struct {
 var sampleConfig = `
   ## host agent subscriber port
   subscriberPort = 40003
-  ## cloud Auth URL string
-  cloudAuthUrl = ""
-  ## cloud user name
-  cloudUser = ""
-  ## cloud password
-  cloudPassword = ""
-  ## cloud tenant
-  cloudTenant = ""
-  ## cloud type
-  cloudProvider = ""
+  [[inputs.host_agent_consumer.cloudProviders]]
+    ## cloud Auth URL string
+    cloudAuthUrl = "http://10.140.64.103:5000"
+    ## cloud user name
+    cloudUser = "admin"
+    ## cloud password
+    cloudPassword = "password"
+    ## cloud tenant
+    cloudTenant = "admin"
+    ## cloud type
+    cloudType = "openstack"
 `
 
 func (h *HostAgent) SampleConfig() string {
@@ -102,6 +104,10 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.subscriber, _ = zmq.NewSocket(zmq.SUB)
 	h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
 	h.subscriber.SetSubscribe("")
+
+	for i, _ := range h.CloudProviders {
+		h.CloudProviders[i].isValid = true
+	}
 
 	// Initialize Cloud Instances
 	h.loadCloudInstances()
@@ -232,39 +238,43 @@ func (h *HostAgent) processMessages() {
 
 func (h *HostAgent) loadCloudInstances() {
 	h.cloudInstances = make(map[string]CloudInstance)
-	for _, c := range h.CloudProviders {
-		cmd := exec.Command("./glimpse",
-			"-auth-url", c.CloudAuthUrl,
-			"-user", c.CloudUser,
-			"-pass", c.CloudPassword,
-			"-tenant", c.CloudTenant,
-			"-provider", c.CloudType,
-			"list", "instances")
+	for i, c := range h.CloudProviders {
+		if c.isValid {
+			cmd := exec.Command("./glimpse",
+				"-auth-url", c.CloudAuthUrl,
+				"-user", c.CloudUser,
+				"-pass", c.CloudPassword,
+				"-tenant", c.CloudTenant,
+				"-provider", c.CloudType,
+				"list", "instances")
 
-		cmdReader, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
-			return
-		}
-		// read the data from stdout
-		buf := bufio.NewReader(cmdReader)
+			cmdReader, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Printf("Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
+				h.CloudProviders[i].isValid = false
+				return
+			}
+			// read the data from stdout
+			buf := bufio.NewReader(cmdReader)
 
-		err = cmd.Start()
-		if err != nil {
-			log.Printf("Error starting glimpse to list instances: %s", err.Error())
-			return
-		}
+			err = cmd.Start()
+			if err != nil {
+				log.Printf("Error starting glimpse to list instances: %s", err.Error())
+				h.CloudProviders[i].isValid = false
+				return
+			}
 
-		output, _ := buf.ReadString('\n')
+			output, _ := buf.ReadString('\n')
 
-		cmd.Process.Kill()
-		cmd.Wait()
+			cmd.Process.Kill()
+			cmd.Wait()
 
-		var instances CloudInstances
-		json.Unmarshal([]byte(output), &instances)
+			var instances CloudInstances
+			json.Unmarshal([]byte(output), &instances)
 
-		for _, instance := range instances.Instances {
-			h.cloudInstances[instance.Id] = instance
+			for _, instance := range instances.Instances {
+				h.cloudInstances[instance.Id] = instance
+			}
 		}
 	}
 }
@@ -272,38 +282,40 @@ func (h *HostAgent) loadCloudInstances() {
 func (h *HostAgent) loadCloudNetworkPorts() {
 	h.cloudNetworkPorts = make(map[string]CloudNetworkPort)
 	for _, c := range h.CloudProviders {
-		cmd := exec.Command("./glimpse",
-			"-auth-url", c.CloudAuthUrl,
-			"-user", c.CloudUser,
-			"-pass", c.CloudPassword,
-			"-tenant", c.CloudTenant,
-			"-provider", c.CloudType,
-			"list", "network-ports")
+		if c.isValid {
+			cmd := exec.Command("./glimpse",
+				"-auth-url", c.CloudAuthUrl,
+				"-user", c.CloudUser,
+				"-pass", c.CloudPassword,
+				"-tenant", c.CloudTenant,
+				"-provider", c.CloudType,
+				"list", "network-ports")
 
-		cmdReader, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
-			return
-		}
-		// read the data from stdout
-		buf := bufio.NewReader(cmdReader)
+			cmdReader, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Printf("Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
+				return
+			}
+			// read the data from stdout
+			buf := bufio.NewReader(cmdReader)
 
-		err = cmd.Start()
-		if err != nil {
-			log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
-			return
-		}
+			err = cmd.Start()
+			if err != nil {
+				log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
+				return
+			}
 
-		output, _ := buf.ReadString('\n')
+			output, _ := buf.ReadString('\n')
 
-		cmd.Process.Kill()
-		cmd.Wait()
+			cmd.Process.Kill()
+			cmd.Wait()
 
-		var networkPorts CloudNetworkPorts
-		json.Unmarshal([]byte(output), &networkPorts)
+			var networkPorts CloudNetworkPorts
+			json.Unmarshal([]byte(output), &networkPorts)
 
-		for _, networkPort := range networkPorts.NetworkPorts {
-			h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
+			for _, networkPort := range networkPorts.NetworkPorts {
+				h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
+			}
 		}
 	}
 }
