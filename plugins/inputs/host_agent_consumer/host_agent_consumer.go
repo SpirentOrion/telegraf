@@ -252,7 +252,7 @@ func (h *HostAgent) loadCloudInstances() {
 			if err != nil {
 				log.Printf("Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
 				h.CloudProviders[i].isValid = false
-				return
+				continue
 			}
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
@@ -261,13 +261,16 @@ func (h *HostAgent) loadCloudInstances() {
 			if err != nil {
 				log.Printf("Error starting glimpse to list instances: %s", err.Error())
 				h.CloudProviders[i].isValid = false
-				return
+				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-
-			cmd.Process.Kill()
-			cmd.Wait()
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("Error returned from glimpse to list instances: %s - %s", err.Error(), output)
+				h.CloudProviders[i].isValid = false
+				continue
+			}
 
 			var instances CloudInstances
 			json.Unmarshal([]byte(output), &instances)
@@ -297,7 +300,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			if err != nil {
 				log.Printf("Error creating StdoutPipe for glimpse to list instance %s: %s", instanceId, err.Error())
 				h.CloudProviders[i].isValid = false
-				return
+				continue
 			}
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
@@ -306,13 +309,16 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			if err != nil {
 				log.Printf("Error starting glimpse to list instance %s: %s", instanceId, err.Error())
 				h.CloudProviders[i].isValid = false
-				return
+				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-
-			cmd.Process.Kill()
-			cmd.Wait()
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("Error returned from glimpse to list instance: %s - %s - %s", instanceId, err.Error(), output)
+				h.CloudProviders[i].isValid = false
+				continue
+			}
 
 			var instances CloudInstances
 			json.Unmarshal([]byte(output), &instances)
@@ -327,7 +333,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 
 func (h *HostAgent) loadCloudNetworkPorts() {
 	h.cloudNetworkPorts = make(map[string]CloudNetworkPort)
-	for _, c := range h.CloudProviders {
+	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
 				"-auth-url", c.CloudAuthUrl,
@@ -340,7 +346,8 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
 				log.Printf("Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
-				return
+				h.CloudProviders[i].isValid = false
+				continue
 			}
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
@@ -348,13 +355,17 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			err = cmd.Start()
 			if err != nil {
 				log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
-				return
+				h.CloudProviders[i].isValid = false
+				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-
-			cmd.Process.Kill()
-			cmd.Wait()
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("Error returned from glimpse to list network-ports: %s - %s", err.Error(), output)
+				h.CloudProviders[i].isValid = false
+				continue
+			}
 
 			var networkPorts CloudNetworkPorts
 			json.Unmarshal([]byte(output), &networkPorts)
