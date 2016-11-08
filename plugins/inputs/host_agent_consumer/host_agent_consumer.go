@@ -257,16 +257,14 @@ func (h *HostAgent) loadCloudInstances() {
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
 
-			err = cmd.Start()
-			if err != nil {
+			if err = cmd.Start(); err != nil {
 				log.Printf("Error starting glimpse to list instances: %s", err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-			err = cmd.Wait()
-			if err != nil {
+			if err = cmd.Wait(); err != nil {
 				log.Printf("Error returned from glimpse to list instances: %s - %s", err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
@@ -274,6 +272,8 @@ func (h *HostAgent) loadCloudInstances() {
 
 			var instances CloudInstances
 			json.Unmarshal([]byte(output), &instances)
+
+			log.Printf("Loading cloud instance names from provider: %s", c.CloudAuthUrl)
 
 			for _, instance := range instances.Instances {
 				h.cloudInstances[instance.Id] = instance
@@ -305,16 +305,14 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
 
-			err = cmd.Start()
-			if err != nil {
+			if err = cmd.Start(); err != nil {
 				log.Printf("Error starting glimpse to list instance %s: %s", instanceId, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-			err = cmd.Wait()
-			if err != nil {
+			if err = cmd.Wait(); err != nil {
 				log.Printf("Error returned from glimpse to list instance: %s - %s - %s", instanceId, err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
@@ -324,7 +322,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			json.Unmarshal([]byte(output), &instances)
 
 			for _, instance := range instances.Instances {
-				log.Printf("Adding new instance name for instance id %s - instance name = %s", instanceId, instance.Name)
+				log.Printf("Adding new cloud instance name from provier %s for instance id %s - instance name = %s", c.CloudAuthUrl, instanceId, instance.Name)
 				h.cloudInstances[instance.Id] = instance
 			}
 		}
@@ -352,16 +350,14 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			// read the data from stdout
 			buf := bufio.NewReader(cmdReader)
 
-			err = cmd.Start()
-			if err != nil {
+			if err = cmd.Start(); err != nil {
 				log.Printf("Error starting glimpse to list network-ports: %s", err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
-			err = cmd.Wait()
-			if err != nil {
+			if err = cmd.Wait(); err != nil {
 				log.Printf("Error returned from glimpse to list network-ports: %s - %s", err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
@@ -369,6 +365,8 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 
 			var networkPorts CloudNetworkPorts
 			json.Unmarshal([]byte(output), &networkPorts)
+
+			log.Printf("Loading cloud network names from provider: %s", c.CloudAuthUrl)
 
 			for _, networkPort := range networkPorts.NetworkPorts {
 				h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
