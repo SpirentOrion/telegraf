@@ -207,7 +207,9 @@ func (h *HostAgent) processMessages() {
 									if ok {
 										dimensions["instance_name"] = cloudInstance.Name
 									} else {
-										dimensions["instance_name"] = "unknown"
+										cloudInstance = CloudInstance{*d.Value, "unknown"}
+										h.cloudInstances[*d.Value] = cloudInstance
+										dimensions["instance_name"] = cloudInstance.Name
 									}
 								}
 							}
@@ -222,7 +224,9 @@ func (h *HostAgent) processMessages() {
 									if ok {
 										dimensions["network_name"] = networkPort.NetworkName
 									} else {
-										dimensions["network_name"] = "unknown"
+										networkPort = CloudNetworkPort{*d.Value, "unknown"}
+										h.cloudNetworkPorts[*d.Value] = networkPort
+										dimensions["network_name"] = networkPort.NetworkName
 									}
 								}
 							}
