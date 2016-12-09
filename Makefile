@@ -8,7 +8,7 @@ PATH := $(subst :,/bin:,$(GOPATH))/bin:$(PATH)
 endif
 
 # Standard Telegraf build
-default: prepare build
+default: build
 
 # Windows build
 windows: prepare-windows build-windows
@@ -35,8 +35,8 @@ package:
 
 # Get dependencies and use gdm to checkout changesets
 prepare:
-	#go get github.com/sparrc/gdm
-	#gdm restore
+	go get github.com/sparrc/gdm
+	gdm restore
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
