@@ -57,38 +57,34 @@ func NewGraphiteParser(
 	defaultTemplate, _ := NewTemplate("measurement*", nil, p.Separator)
 	matcher.AddDefaultTemplate(defaultTemplate)
 
+	tmplts := parsedTemplates{}
 	for _, pattern := range p.Templates {
-		template := pattern
-		filter := ""
+		tmplt := parsedTemplate{}
+		tmplt.template = pattern
 		// Format is [filter] <template> [tag1=value1,tag2=value2]
 		parts := strings.Fields(pattern)
 		if len(parts) < 1 {
 			continue
 		} else if len(parts) >= 2 {
 			if strings.Contains(parts[1], "=") {
-				template = parts[0]
+				tmplt.template = parts[0]
+				tmplt.tagstring = parts[1]
 			} else {
-				filter = parts[0]
-				template = parts[1]
+				tmplt.filter = parts[0]
+				tmplt.template = parts[1]
+				if len(parts) > 2 {
+					tmplt.tagstring = parts[2]
+				}
 			}
 		}
+		tmplts = append(tmplts, tmplt)
+	}
 
-		// Parse out the default tags specific to this template
-		tags := map[string]string{}
-		if strings.Contains(parts[len(parts)-1], "=") {
-			tagStrs := strings.Split(parts[len(parts)-1], ",")
-			for _, kv := range tagStrs {
-				parts := strings.Split(kv, "=")
-				tags[parts[0]] = parts[1]
-			}
+	sort.Sort(tmplts)
+	for _, tmplt := range tmplts {
+		if err := p.addToMatcher(tmplt); err != nil {
+			return nil, err
 		}
-
-		tmpl, err1 := NewTemplate(template, tags, p.Separator)
-		if err1 != nil {
-			err = err1
-			break
-		}
-		matcher.Add(filter, tmpl)
 	}
 
 	if err != nil {
@@ -96,6 +92,24 @@ func NewGraphiteParser(
 	} else {
 		return p, nil
 	}
+}
+
+func (p *GraphiteParser) addToMatcher(tmplt parsedTemplate) error {
+	// Parse out the default tags specific to this template
+	tags := map[string]string{}
+	if tmplt.tagstring != "" {
+		for _, kv := range strings.Split(tmplt.tagstring, ",") {
+			parts := strings.Split(kv, "=")
+			tags[parts[0]] = parts[1]
+		}
+	}
+
+	tmpl, err := NewTemplate(tmplt.template, tags, p.Separator)
+	if err != nil {
+		return err
+	}
+	p.matcher.Add(tmplt.filter, tmpl)
+	return nil
 }
 
 func (p *GraphiteParser) Parse(buf []byte) ([]telegraf.Metric, error) {
@@ -133,7 +147,7 @@ func (p *GraphiteParser) Parse(buf []byte) ([]telegraf.Metric, error) {
 	}
 
 	if errStr != "" {
-		return metrics, fmt.Errorf(errStr)
+		return metrics, fmt.Errorf(strings.TrimSpace(errStr))
 	}
 	return metrics, nil
 }
@@ -267,13 +281,13 @@ func (t *template) Apply(line string) (string, map[string]string, string, error)
 	fields := strings.Split(line, ".")
 	var (
 		measurement []string
-		tags        = make(map[string]string)
+		tags        = make(map[string][]string)
 		field       []string
 	)
 
 	// Set any default tags
 	for k, v := range t.defaultTags {
-		tags[k] = v
+		tags[k] = append(tags[k], v)
 	}
 
 	// See if an invalid combination has been specified in the template:
@@ -285,30 +299,43 @@ func (t *template) Apply(line string) (string, map[string]string, string, error)
 		}
 	}
 	if t.greedyField && t.greedyMeasurement {
-		return "", nil, "", fmt.Errorf("either 'field*' or 'measurement*' can be used in each template (but not both together): %q", strings.Join(t.tags, t.separator))
+		return "", nil, "",
+			fmt.Errorf("either 'field*' or 'measurement*' can be used in each "+
+				"template (but not both together): %q",
+				strings.Join(t.tags, t.separator))
 	}
 
 	for i, tag := range t.tags {
 		if i >= len(fields) {
 			continue
 		}
+		if tag == "" {
+			continue
+		}
 
-		if tag == "measurement" {
+		switch tag {
+		case "measurement":
 			measurement = append(measurement, fields[i])
-		} else if tag == "field" {
+		case "field":
 			field = append(field, fields[i])
-		} else if tag == "field*" {
+		case "field*":
 			field = append(field, fields[i:]...)
 			break
-		} else if tag == "measurement*" {
+		case "measurement*":
 			measurement = append(measurement, fields[i:]...)
 			break
-		} else if tag != "" {
-			tags[tag] = fields[i]
+		default:
+			tags[tag] = append(tags[tag], fields[i])
 		}
 	}
 
-	return strings.Join(measurement, t.separator), tags, strings.Join(field, t.separator), nil
+	// Convert to map of strings.
+	outtags := make(map[string]string)
+	for k, values := range tags {
+		outtags[k] = strings.Join(values, t.separator)
+	}
+
+	return strings.Join(measurement, t.separator), outtags, strings.Join(field, t.separator), nil
 }
 
 // matcher determines which template should be applied to a given metric
@@ -452,3 +479,30 @@ func (n *nodes) Less(j, k int) bool {
 
 func (n *nodes) Swap(i, j int) { (*n)[i], (*n)[j] = (*n)[j], (*n)[i] }
 func (n *nodes) Len() int      { return len(*n) }
+
+type parsedTemplate struct {
+	template  string
+	filter    string
+	tagstring string
+}
+type parsedTemplates []parsedTemplate
+
+func (e parsedTemplates) Less(j, k int) bool {
+	if len(e[j].filter) == 0 && len(e[k].filter) == 0 {
+		nj := len(strings.Split(e[j].template, "."))
+		nk := len(strings.Split(e[k].template, "."))
+		return nj < nk
+	}
+	if len(e[j].filter) == 0 {
+		return true
+	}
+	if len(e[k].filter) == 0 {
+		return false
+	}
+
+	nj := len(strings.Split(e[j].template, "."))
+	nk := len(strings.Split(e[k].template, "."))
+	return nj < nk
+}
+func (e parsedTemplates) Swap(i, j int) { e[i], e[j] = e[j], e[i] }
+func (e parsedTemplates) Len() int      { return len(e) }

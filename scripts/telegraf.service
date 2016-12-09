@@ -9,8 +9,7 @@ User=telegraf
 ExecStart=/usr/bin/telegraf -config /etc/telegraf/telegraf.conf -config-directory /etc/telegraf/telegraf.d ${TELEGRAF_OPTS}
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
-KillMode=process
+KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target
-Alias=telegraf.service

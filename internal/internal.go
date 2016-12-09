@@ -2,19 +2,30 @@ package internal
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"math/big"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
 
 const alphanum string = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+var (
+	TimeoutErr = errors.New("Command timed out.")
+
+	NotImplementedError = errors.New("not implemented yet")
+)
 
 // Duration just wraps time.Duration
 type Duration struct {
@@ -23,17 +34,38 @@ type Duration struct {
 
 // UnmarshalTOML parses the duration from the TOML config file
 func (d *Duration) UnmarshalTOML(b []byte) error {
-	dur, err := time.ParseDuration(string(b[1 : len(b)-1]))
-	if err != nil {
-		return err
+	var err error
+	b = bytes.Trim(b, `'`)
+
+	// see if we can directly convert it
+	d.Duration, err = time.ParseDuration(string(b))
+	if err == nil {
+		return nil
 	}
 
-	d.Duration = dur
+	// Parse string duration, ie, "1s"
+	if uq, err := strconv.Unquote(string(b)); err == nil && len(uq) > 0 {
+		d.Duration, err = time.ParseDuration(uq)
+		if err == nil {
+			return nil
+		}
+	}
+
+	// First try parsing as integer seconds
+	sI, err := strconv.ParseInt(string(b), 10, 64)
+	if err == nil {
+		d.Duration = time.Second * time.Duration(sI)
+		return nil
+	}
+	// Second try parsing as float seconds
+	sF, err := strconv.ParseFloat(string(b), 64)
+	if err == nil {
+		d.Duration = time.Second * time.Duration(sF)
+		return nil
+	}
 
 	return nil
 }
-
-var NotImplementedError = errors.New("not implemented yet")
 
 // ReadLines reads contents from a file and splits them by new lines.
 // A convenience wrapper to ReadLinesOffsetN(filename, 0, -1).
@@ -111,8 +143,8 @@ func GetTLSConfig(
 		cert, err := tls.LoadX509KeyPair(SSLCert, SSLKey)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf(
-				"Could not load TLS client key/certificate: %s",
-				err))
+				"Could not load TLS client key/certificate from %s:%s: %s",
+				SSLKey, SSLCert, err))
 		}
 
 		t.Certificates = []tls.Certificate{cert}
@@ -138,4 +170,73 @@ func SnakeCase(in string) string {
 	}
 
 	return string(out)
+}
+
+// CombinedOutputTimeout runs the given command with the given timeout and
+// returns the combined output of stdout and stderr.
+// If the command times out, it attempts to kill the process.
+func CombinedOutputTimeout(c *exec.Cmd, timeout time.Duration) ([]byte, error) {
+	var b bytes.Buffer
+	c.Stdout = &b
+	c.Stderr = &b
+	if err := c.Start(); err != nil {
+		return nil, err
+	}
+	err := WaitTimeout(c, timeout)
+	return b.Bytes(), err
+}
+
+// RunTimeout runs the given command with the given timeout.
+// If the command times out, it attempts to kill the process.
+func RunTimeout(c *exec.Cmd, timeout time.Duration) error {
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return WaitTimeout(c, timeout)
+}
+
+// WaitTimeout waits for the given command to finish with a timeout.
+// It assumes the command has already been started.
+// If the command times out, it attempts to kill the process.
+func WaitTimeout(c *exec.Cmd, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	done := make(chan error)
+	go func() { done <- c.Wait() }()
+	select {
+	case err := <-done:
+		timer.Stop()
+		return err
+	case <-timer.C:
+		if err := c.Process.Kill(); err != nil {
+			log.Printf("E! FATAL error killing process: %s", err)
+			return err
+		}
+		// wait for the command to return after killing it
+		<-done
+		return TimeoutErr
+	}
+}
+
+// RandomSleep will sleep for a random amount of time up to max.
+// If the shutdown channel is closed, it will return before it has finished
+// sleeping.
+func RandomSleep(max time.Duration, shutdown chan struct{}) {
+	if max == 0 {
+		return
+	}
+	maxSleep := big.NewInt(max.Nanoseconds())
+
+	var sleepns int64
+	if j, err := rand.Int(rand.Reader, maxSleep); err == nil {
+		sleepns = j.Int64()
+	}
+
+	t := time.NewTimer(time.Nanosecond * time.Duration(sleepns))
+	select {
+	case <-t.C:
+		return
+	case <-shutdown:
+		t.Stop()
+		return
+	}
 }
