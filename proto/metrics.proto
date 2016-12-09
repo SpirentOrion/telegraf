@@ -1,0 +1,30 @@
+
+package metrics;
+
+// Metric Value
+message MetricValue {
+  required string name = 1;
+  oneof Value {
+    double doubleValue = 2;
+    int64 int64Value = 3;
+  }
+}
+
+// Metric Dimension
+message MetricDimension {
+  required string name = 1;
+  required string value = 2;
+}
+
+// Real-time metric
+message Metric {
+  required string name = 1;
+  required int64 timestamp = 2;
+  repeated MetricValue values = 3;
+  repeated MetricDimension dimensions = 4;
+}
+
+// Collection of Real-time metrics
+message Metrics {
+  repeated Metric metrics = 1;
+}

@@ -18,7 +18,7 @@ github.com/eapache/queue ded5959c0d4e360646dc9e9908cff48666781367
 github.com/eclipse/paho.mqtt.golang 0f7a459f04f13a41b7ed752d47944528d4bf9a86
 github.com/go-sql-driver/mysql 1fca743146605a172a266e1654e01e5cd5669bee
 github.com/gobwas/glob 49571a1557cd20e6a2410adc6421f85b66c730b5
-github.com/golang/protobuf 552c7b9542c194800fd493123b3798ef0a832032
+github.com/golang/protobuf 1f49d83d9aa00e6ce4fc8258c71cc7786aec968a
 github.com/golang/snappy d9eb7a3d35ec988b8585d4a0068e462c27d28380
 github.com/gonuts/go-shellquote e842a11b24c6abfb3dd27af69a17f482e4b483c2
 github.com/gorilla/context 1ea25387ff6f684839d82767c1733ff4d4d15d0a
@@ -42,6 +42,7 @@ github.com/nats-io/nats ea8b4fd12ebb823073c0004b9f09ac8748f4f165
 github.com/nats-io/nuid a5152d67cf63cbfb5d992a395458722a45194715
 github.com/nsqio/go-nsq 0b80d6f05e15ca1930e0c5e1d540ed627e299980
 github.com/opencontainers/runc 89ab7f2ccc1e45ddf6485eaa802c35dcf321dfc8
+github.com/pebbe/zmq4 918dc0cde6ccf7e1068859fc62963f6f05087478
 github.com/prometheus/client_golang 18acf9993a863f4c4b40612e19cdd243e7c86831
 github.com/prometheus/client_model fa8ad6fec33561be4280a8f0514318c79d7f6cb6
 github.com/prometheus/common e8eabff8812b05acf522b45fdcd725a785188e37

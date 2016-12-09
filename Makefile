@@ -15,6 +15,7 @@ windows: prepare-windows build-windows
 
 # Only run the build (no dependency grabbing)
 build:
+	cd proto && make
 	go install -ldflags \
 		"-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.branch=$(BRANCH)" ./...
 
@@ -34,8 +35,8 @@ package:
 
 # Get dependencies and use gdm to checkout changesets
 prepare:
-	go get github.com/sparrc/gdm
-	gdm restore
+	#go get github.com/sparrc/gdm
+	#gdm restore
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
