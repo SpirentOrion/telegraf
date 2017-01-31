@@ -32,9 +32,16 @@ type CloudStressAgent struct {
 	// keep the accumulator internally:
 	acc telegraf.Accumulator
 
-	prevTime  time.Time
-	prevValue int64
-	currValue int64
+	running           bool
+	startTime         time.Time
+	totalTime         time.Duration
+	prevTime          time.Time
+	prevMsgsValue     int64
+	currMsgsValue     int64
+	totalMsgsValue    int64
+	prevMetricsValue  int64
+	currMetriscValue  int64
+	totalMetricsValue int64
 }
 
 var sampleConfig = `
@@ -93,15 +100,31 @@ func (c *CloudStressAgent) Gather(acc telegraf.Accumulator) error {
 	currTime := time.Now()
 	diffTime := currTime.Sub(c.prevTime) / time.Second
 	c.prevTime = currTime
-	diffValue := c.currValue - c.prevValue
-	c.prevValue = c.currValue
+	diffMsgsValue := c.currMsgsValue - c.prevMsgsValue
+	c.prevMsgsValue = c.currMsgsValue
+	diffMetricsValue := c.currMetriscValue - c.prevMetricsValue
+	c.prevMetricsValue = c.currMetriscValue
 
 	if diffTime == 0 {
 		return nil
 	}
 
-	rate := float64(diffValue) / float64(diffTime)
-	log.Printf("I! Processed %f cloud-stress agent metrics per second\n", rate)
+	if c.running && diffMsgsValue > 0 {
+		c.totalTime = s.Sub(c.startTime) / time.Second
+	} else {
+		if diffMsgsValue == 0 {
+			c.running = false
+		}
+	}
+
+	rate := float64(diffMsgsValue) / float64(diffTime)
+	log.Printf("I! Processed %f cloud-stress agent metric messages per second\n", rate)
+	log.Printf("I! Processed %d total cloud-stress agent metric messages\n", c.totalMsgsValue)
+	rate = float64(diffMetricsValue) / float64(diffTime)
+	log.Printf("I! Processed %f cloud-stress agent metric values per second\n", rate)
+	log.Printf("I! Processed %d total cloud-stress agent metric values\n", c.totalMetricsValue)
+	rate = float64(c.totalMetricsValue) / float64(c.totalTime)
+	log.Printf("I! Proccessed on average of %f agent metrics values per second", rate)
 	return nil
 }
 
@@ -114,6 +137,10 @@ func (c *CloudStressAgent) subscribe() {
 		if err != nil {
 			break
 		} else {
+			if !c.running {
+				c.startTime = time.Now()
+				c.running = true
+			}
 			c.msgs <- msg
 		}
 	}
@@ -145,19 +172,31 @@ func (c *CloudStressAgent) processMessages() {
 			case result.Update_CPU:
 				metrics := c.processCPUMessage(loadType, updateMsg)
 				go c.acc.AddFields(loadType, metrics, tags, time.Now())
-				c.currValue++
+				c.currMsgsValue++
+				c.totalMsgsValue++
+				c.currMetriscValue += int64(len(metrics))
+				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_MEMORY:
 				metrics := c.processMemoryMessage(loadType, timestamp, updateMsg)
 				go c.acc.AddFields(loadType, metrics, tags, time.Now())
-				c.currValue++
+				c.currMsgsValue++
+				c.totalMsgsValue++
+				c.currMetriscValue += int64(len(metrics))
+				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_BLOCK:
 				metrics := c.processBlockMessage(loadType, timestamp, updateMsg)
 				go c.acc.AddFields(loadType, metrics, tags, time.Now())
-				c.currValue++
+				c.currMsgsValue++
+				c.totalMsgsValue++
+				c.currMetriscValue += int64(len(metrics))
+				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_NETWORK:
 				metrics := c.processNetworkMessage(loadType, timestamp, updateMsg)
 				go c.acc.AddFields(loadType, metrics, tags, time.Now())
-				c.currValue++
+				c.currMsgsValue++
+				c.totalMsgsValue++
+				c.currMetriscValue += int64(len(metrics))
+				c.totalMetricsValue += int64(len(metrics))
 			default:
 				log.Printf("E! Unknown Type\n")
 			}
