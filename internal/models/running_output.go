@@ -26,11 +26,14 @@ type RunningOutput struct {
 	MetricBufferLimit int
 	MetricBatchSize   int
 
+	ParallelOutput    bool
+
 	MetricsFiltered selfstat.Stat
 	MetricsWritten  selfstat.Stat
 	BufferSize      selfstat.Stat
 	BufferLimit     selfstat.Stat
 	WriteTime       selfstat.Stat
+
 
 	metrics     *buffer.Buffer
 	failMetrics *buffer.Buffer
@@ -42,6 +45,7 @@ func NewRunningOutput(
 	conf *OutputConfig,
 	batchSize int,
 	bufferLimit int,
+	parallelOutput bool,
 ) *RunningOutput {
 	if bufferLimit == 0 {
 		bufferLimit = DEFAULT_METRIC_BUFFER_LIMIT
@@ -57,6 +61,7 @@ func NewRunningOutput(
 		Config:            conf,
 		MetricBufferLimit: bufferLimit,
 		MetricBatchSize:   batchSize,
+		ParallelOutput:    parallelOutput,
 		MetricsWritten: selfstat.Register(
 			"write",
 			"metrics_written",
@@ -112,9 +117,13 @@ func (ro *RunningOutput) AddMetric(m telegraf.Metric) {
 	ro.metrics.Add(m)
 	if ro.metrics.Len() == ro.MetricBatchSize {
 		batch := ro.metrics.Batch(ro.MetricBatchSize)
-		err := ro.write(batch)
-		if err != nil {
-			ro.failMetrics.Add(batch...)
+		if ro.ParallelOutput {
+			go ro.write(batch)
+		} else {
+			err := ro.write(batch)
+			if err != nil {
+				ro.failMetrics.Add(batch...)
+			}
 		}
 	}
 }
@@ -142,7 +151,11 @@ func (ro *RunningOutput) Write() error {
 			// write to this output again. We are not exiting the loop just so
 			// that we can rotate the metrics to preserve order.
 			if err == nil {
-				err = ro.write(batch)
+				if ro.ParallelOutput {
+					go ro.write(batch)
+				} else {
+					err = ro.write(batch)
+				}
 			}
 			if err != nil {
 				ro.failMetrics.Add(batch...)
@@ -154,9 +167,12 @@ func (ro *RunningOutput) Write() error {
 	// see comment above about not trying to write to an already failed output.
 	// if ro.failMetrics is empty then err will always be nil at this point.
 	if err == nil {
-		err = ro.write(batch)
+		if ro.ParallelOutput {
+			go ro.write(batch)
+		} else {
+			err = ro.write(batch)
+		}
 	}
-
 	if err != nil {
 		ro.failMetrics.Add(batch...)
 		return err
