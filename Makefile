@@ -1,6 +1,6 @@
 VERSION := $(shell sh -c 'git describe --always --tags')
 BRANCH := $(shell sh -c 'git rev-parse --abbrev-ref HEAD')
-COMMIT := $(shell sh -c 'git rev-parse HEAD')
+COMMIT := $(shell sh -c 'git rev-parse --short HEAD')
 ifdef GOBIN
 PATH := $(GOBIN):$(PATH)
 else
@@ -8,14 +8,13 @@ PATH := $(subst :,/bin:,$(GOPATH))/bin:$(PATH)
 endif
 
 # Standard Telegraf build
-default: build
+default: prepare build
 
 # Windows build
 windows: prepare-windows build-windows
 
 # Only run the build (no dependency grabbing)
 build:
-	cd proto && make
 	go install -ldflags \
 		"-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.branch=$(BRANCH)" ./...
 
@@ -59,7 +58,7 @@ docker-run:
 	docker run --name redis -p "6379:6379" -d redis
 	docker run --name nsq -p "4150:4150" -d nsqio/nsq /nsqd
 	docker run --name mqtt -p "1883:1883" -d ncarlier/mqtt
-	docker run --name riemann -p "5555:5555" -d blalor/riemann
+	docker run --name riemann -p "5555:5555" -d stealthly/docker-riemann
 	docker run --name nats -p "4222:4222" -d nats
 
 # Run docker containers necessary for CircleCI unit tests
@@ -72,7 +71,7 @@ docker-run-circle:
 		-d spotify/kafka
 	docker run --name nsq -p "4150:4150" -d nsqio/nsq /nsqd
 	docker run --name mqtt -p "1883:1883" -d ncarlier/mqtt
-	docker run --name riemann -p "5555:5555" -d blalor/riemann
+	docker run --name riemann -p "5555:5555" -d stealthly/docker-riemann
 	docker run --name nats -p "4222:4222" -d nats
 
 # Kill all docker containers, ignore errors

@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shirou/gopsutil/process"
-
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 )
@@ -21,16 +19,14 @@ type Procstat struct {
 	Prefix      string
 	ProcessName string
 	User        string
+	PidTag      bool
 
-	// pidmap maps a pid to a process object, so we don't recreate every gather
-	pidmap map[int32]*process.Process
 	// tagmap maps a pid to a map of tags for that pid
 	tagmap map[int32]map[string]string
 }
 
 func NewProcstat() *Procstat {
 	return &Procstat{
-		pidmap: make(map[int32]*process.Process),
 		tagmap: make(map[int32]map[string]string),
 	}
 }
@@ -53,6 +49,8 @@ var sampleConfig = `
   prefix = ""
   ## comment this out if you want raw cpu_time stats
   fielddrop = ["cpu_time_*"]
+  ## This is optional; moves pid into a tag instead of a field
+  pid_tag = false
 `
 
 func (_ *Procstat) SampleConfig() string {
@@ -64,46 +62,24 @@ func (_ *Procstat) Description() string {
 }
 
 func (p *Procstat) Gather(acc telegraf.Accumulator) error {
-	err := p.createProcesses()
+	pids, err := p.getAllPids()
 	if err != nil {
 		log.Printf("E! Error: procstat getting process, exe: [%s] pidfile: [%s] pattern: [%s] user: [%s] %s",
 			p.Exe, p.PidFile, p.Pattern, p.User, err.Error())
 	} else {
-		for pid, proc := range p.pidmap {
-			p := NewSpecProcessor(p.ProcessName, p.Prefix, pid, acc, proc, p.tagmap[pid])
-			p.pushMetrics()
-		}
-	}
-
-	return nil
-}
-
-func (p *Procstat) createProcesses() error {
-	var errstring string
-	var outerr error
-
-	pids, err := p.getAllPids()
-	if err != nil {
-		errstring += err.Error() + " "
-	}
-
-	for _, pid := range pids {
-		_, ok := p.pidmap[pid]
-		if !ok {
-			proc, err := process.NewProcess(pid)
-			if err == nil {
-				p.pidmap[pid] = proc
-			} else {
-				errstring += err.Error() + " "
+		for _, pid := range pids {
+			if p.PidTag {
+				p.tagmap[pid]["pid"] = fmt.Sprint(pid)
+			}
+			p := NewSpecProcessor(p.ProcessName, p.Prefix, pid, acc, p.tagmap[pid])
+			err := p.pushMetrics()
+			if err != nil {
+				log.Printf("E! Error: procstat: %s", err.Error())
 			}
 		}
 	}
 
-	if errstring != "" {
-		outerr = fmt.Errorf("%s", errstring)
-	}
-
-	return outerr
+	return nil
 }
 
 func (p *Procstat) getAllPids() ([]int32, error) {

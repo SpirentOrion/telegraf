@@ -139,10 +139,6 @@ type AgentConfig struct {
 	Quiet        bool
 	Hostname     string
 	OmitHostname bool
-
-	// ParallelOutput tells telegraf to run output plugins in parallel
-	// for increased output performance
-	ParallelOutput bool
 }
 
 // Inputs returns a list of strings of the configured inputs.
@@ -253,8 +249,6 @@ var header = `# Telegraf Configuration
   ## If set to true, do no set the "host" tag in the telegraf agent.
   omit_hostname = false
 
-  ## Run output plugins in parallel for faster output performance
-  parallel_output = false
 
 ###############################################################################
 #                            OUTPUT PLUGINS                                   #
@@ -787,8 +781,7 @@ func (c *Config) addOutput(name string, table *ast.Table) error {
 	}
 
 	ro := models.NewRunningOutput(name, output, outputConfig,
-		c.Agent.MetricBatchSize, c.Agent.MetricBufferLimit,
-		c.Agent.ParallelOutput)
+		c.Agent.MetricBatchSize, c.Agent.MetricBufferLimit)
 	c.Outputs = append(c.Outputs, ro)
 	return nil
 }
@@ -828,10 +821,7 @@ func (c *Config) addInput(name string, table *ast.Table) error {
 		return err
 	}
 
-	rp := &models.RunningInput{
-		Input:  input,
-		Config: pluginConfig,
-	}
+	rp := models.NewRunningInput(input, pluginConfig)
 	c.Inputs = append(c.Inputs, rp)
 	return nil
 }
