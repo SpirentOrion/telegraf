@@ -195,7 +195,9 @@ func (h *HostAgent) processMessages() {
 						if *metric.Name == "host_proc_metrics" ||
 							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "libvirt_domain_block_metrics" ||
-							*metric.Name == "libvirt_domain_interface_metrics" {
+							*metric.Name == "libvirt_domain_interface_metrics" ||
+							*metric.Name == "vswitch_interface_metrics" ||
+							*metric.Name == "vswitch_dpdk_interface_metrics" {
 							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {

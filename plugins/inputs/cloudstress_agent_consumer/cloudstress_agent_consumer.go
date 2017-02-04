@@ -110,7 +110,7 @@ func (c *CloudStressAgent) Gather(acc telegraf.Accumulator) error {
 	}
 
 	if c.running && diffMsgsValue > 0 {
-		c.totalTime = s.Sub(c.startTime) / time.Second
+		c.totalTime = currTime.Sub(c.startTime) / time.Second
 	} else {
 		if diffMsgsValue == 0 {
 			c.running = false
