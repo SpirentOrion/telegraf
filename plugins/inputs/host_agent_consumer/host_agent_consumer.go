@@ -146,7 +146,7 @@ func (h *HostAgent) Gather(acc telegraf.Accumulator) error {
 	}
 
 	rate := float64(diffValue) / float64(diffTime)
-	log.Printf("I! Processed %f host agent metrics per second\n", rate)
+	log.Printf("D! Processed %f host agent metrics per second\n", rate)
 	return nil
 }
 

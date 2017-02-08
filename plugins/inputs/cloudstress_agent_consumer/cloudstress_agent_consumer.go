@@ -118,13 +118,13 @@ func (c *CloudStressAgent) Gather(acc telegraf.Accumulator) error {
 	}
 
 	rate := float64(diffMsgsValue) / float64(diffTime)
-	log.Printf("I! Processed %f cloud-stress agent metric messages per second\n", rate)
-	log.Printf("I! Processed %d total cloud-stress agent metric messages\n", c.totalMsgsValue)
+	log.Printf("D! Processed %f cloud-stress agent metric messages per second\n", rate)
+	log.Printf("D! Processed %d total cloud-stress agent metric messages\n", c.totalMsgsValue)
 	rate = float64(diffMetricsValue) / float64(diffTime)
-	log.Printf("I! Processed %f cloud-stress agent metric values per second\n", rate)
-	log.Printf("I! Processed %d total cloud-stress agent metric values\n", c.totalMetricsValue)
+	log.Printf("D! Processed %f cloud-stress agent metric values per second\n", rate)
+	log.Printf("D! Processed %d total cloud-stress agent metric values\n", c.totalMetricsValue)
 	rate = float64(c.totalMetricsValue) / float64(c.totalTime)
-	log.Printf("I! Proccessed on average of %f agent metrics values per second", rate)
+	log.Printf("D! Proccessed on average of %f agent metrics values per second", rate)
 	return nil
 }
 
