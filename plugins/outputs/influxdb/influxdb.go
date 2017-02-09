@@ -17,16 +17,17 @@ import (
 
 type InfluxDB struct {
 	// URL is only for backwards compatability
-	URL              string
-	URLs             []string `toml:"urls"`
-	Username         string
-	Password         string
-	Database         string
-	UserAgent        string
-	RetentionPolicy  string
-	WriteConsistency string
-	Timeout          internal.Duration
-	UDPPayload       int `toml:"udp_payload"`
+	URL               string
+	URLs              []string `toml:"urls"`
+	Username          string
+	Password          string
+	Database          string
+	UserAgent         string
+	RetentionPolicy   string
+	RetentionDuration string
+	WriteConsistency  string
+	Timeout           internal.Duration
+	UDPPayload        int `toml:"udp_payload"`
 
 	// Path to CA file
 	SSLCA string `toml:"ssl_ca"`
@@ -54,6 +55,9 @@ var sampleConfig = `
 
   ## Retention policy to write to. Empty string writes to the default rp.
   retention_policy = ""
+  ## Retention duration
+  retention_duration = ""
+
   ## Write consistency (clusters only), can be: "any", "one", "quorum", "all"
   write_consistency = "any"
 
@@ -124,7 +128,7 @@ func (i *InfluxDB) Connect() error {
 			}
 			i.clients = append(i.clients, c)
 
-			err = c.Query("CREATE DATABASE " + i.Database)
+			err = c.Query("CREATE DATABASE " + i.Database + " WITH DURATION " + i.RetentionDuration + " NAME " + `"` + i.RetentionPolicy + `"`)
 			if err != nil {
 				log.Println("E! Database creation failed: " + err.Error())
 				continue
@@ -165,7 +169,7 @@ func (i *InfluxDB) Write(metrics []telegraf.Metric) error {
 		if _, e := i.clients[n].WriteStream(r, bufsize); e != nil {
 			// If the database was not found, try to recreate it:
 			if strings.Contains(e.Error(), "database not found") {
-				if errc := i.clients[n].Query("CREATE DATABASE  " + i.Database); errc != nil {
+				if errc := i.clients[n].Query("CREATE DATABASE " + i.Database + " WITH DURATION " + i.RetentionDuration + " NAME " + `"` + i.RetentionPolicy + `"`); errc != nil {
 					log.Printf("E! Error: Database %s not found and failed to recreate\n",
 						i.Database)
 				}
