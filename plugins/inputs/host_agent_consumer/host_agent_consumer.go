@@ -215,7 +215,7 @@ func (h *HostAgent) processMessages() {
 									}
 								}
 							}
-							if *d.Name == "mac_addr" {
+							if *d.Name == "mac_addr" && *d.Value != "na" {
 								networkPort, ok := h.cloudNetworkPorts[*d.Value]
 								if ok {
 									dimensions["network_name"] = networkPort.NetworkName
