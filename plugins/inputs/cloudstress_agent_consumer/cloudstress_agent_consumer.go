@@ -2,6 +2,7 @@ package cloudstress_agent_consumer
 
 import (
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,8 +71,6 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 	c.deltaValues = make(map[string]map[string]uint64)
 	c.deltaRates = make(map[string]map[string]map[string]int64)
 
-	c.totalTime = 0
-
 	c.subscriber, _ = zmq.NewSocket(zmq.SUB)
 	c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
 	//for _, agentIp := range c.AgentList {
@@ -126,6 +125,9 @@ func (c *CloudStressAgent) Gather(acc telegraf.Accumulator) error {
 	log.Printf("D! Processed %f cloud-stress agent metric values per second\n", rate)
 	log.Printf("D! Processed %d total cloud-stress agent metric values\n", c.totalMetricsValue)
 	rate = float64(c.totalMetricsValue) / float64(c.totalTime)
+	if math.IsNaN(rate) {
+		rate = 0.0
+	}
 	log.Printf("D! Proccessed on average of %f agent metrics values per second", rate)
 	return nil
 }
