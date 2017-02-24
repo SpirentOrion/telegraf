@@ -70,6 +70,8 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 	c.deltaValues = make(map[string]map[string]uint64)
 	c.deltaRates = make(map[string]map[string]map[string]int64)
 
+	c.totalTime = 0
+
 	c.subscriber, _ = zmq.NewSocket(zmq.SUB)
 	c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
 	//for _, agentIp := range c.AgentList {
