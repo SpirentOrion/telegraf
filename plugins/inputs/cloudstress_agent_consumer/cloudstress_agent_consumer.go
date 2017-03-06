@@ -175,28 +175,28 @@ func (c *CloudStressAgent) processMessages() {
 			switch updateMsg.GetType() {
 			case result.Update_CPU:
 				metrics := c.processCPUMessage(loadType, updateMsg)
-				go c.acc.AddFields(loadType, metrics, tags, time.Now())
+				go c.acc.AddFields(loadType, metrics, tags, time.Unix(0, timestamp))
 				c.currMsgsValue++
 				c.totalMsgsValue++
 				c.currMetriscValue += int64(len(metrics))
 				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_MEMORY:
 				metrics := c.processMemoryMessage(loadType, timestamp, updateMsg)
-				go c.acc.AddFields(loadType, metrics, tags, time.Now())
+				go c.acc.AddFields(loadType, metrics, tags, time.Unix(0, timestamp))
 				c.currMsgsValue++
 				c.totalMsgsValue++
 				c.currMetriscValue += int64(len(metrics))
 				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_BLOCK:
 				metrics := c.processBlockMessage(loadType, timestamp, updateMsg)
-				go c.acc.AddFields(loadType, metrics, tags, time.Now())
+				go c.acc.AddFields(loadType, metrics, tags, time.Unix(0, timestamp))
 				c.currMsgsValue++
 				c.totalMsgsValue++
 				c.currMetriscValue += int64(len(metrics))
 				c.totalMetricsValue += int64(len(metrics))
 			case result.Update_NETWORK:
 				metrics := c.processNetworkMessage(loadType, timestamp, updateMsg)
-				go c.acc.AddFields(loadType, metrics, tags, time.Now())
+				go c.acc.AddFields(loadType, metrics, tags, time.Unix(0, timestamp))
 				c.currMsgsValue++
 				c.totalMsgsValue++
 				c.currMetriscValue += int64(len(metrics))
