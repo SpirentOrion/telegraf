@@ -28,6 +28,7 @@ type HostAgent struct {
 	msgs chan []string
 	done chan struct{}
 
+	cloudHypervisors  map[string]CloudHypervisor
 	cloudInstances    map[string]CloudInstance
 	cloudNetworkPorts map[string]CloudNetworkPort
 
@@ -45,6 +46,15 @@ type CloudProvider struct {
 	CloudTenant   string
 	CloudType     string
 	isValid       bool
+}
+
+type CloudHypervisors struct {
+	Hypervisors []CloudHypervisor `json:"hypervisors,required"`
+}
+
+type CloudHypervisor struct {
+	HostIP string `json:"host_ip,required"`
+	HostName string `json:"host_name,required"`
 }
 
 type CloudInstances struct {
@@ -108,6 +118,9 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	for i, _ := range h.CloudProviders {
 		h.CloudProviders[i].isValid = true
 	}
+
+	// Initialize Cloud Hypervisors
+	h.loadCloudHypervisors()
 
 	// Initialize Cloud Instances
 	h.loadCloudInstances()
@@ -192,6 +205,23 @@ func (h *HostAgent) processMessages() {
 					dimensions := make(map[string]string)
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
+						if *d.Name == "hostname" && len(*d.Value) > 0 {
+							cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
+							if ok {
+								dimensions["host_ip"] = cloudHypervisor.HostIP
+							} else {
+								// reload cloud hypervisors - looks like new hypervisor came online
+								h.loadCloudHypervisors()
+								cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
+								if ok {
+									dimensions["host_ip"] = cloudHypervisor.HostIP
+								} else {
+									cloudHypervisor = CloudHypervisor{*d.Value, "unknown"}
+									h.cloudHypervisors[*d.Value] = cloudHypervisor
+									dimensions["host_ip"] = cloudHypervisor.HostIP
+								}
+							}
+						}
 						if *metric.Name == "host_proc_metrics" ||
 							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "intel_pcm_core_metrics" ||
@@ -239,6 +269,52 @@ func (h *HostAgent) processMessages() {
 					h.currValue++
 				}
 			}(msg)
+		}
+	}
+}
+
+func (h *HostAgent) loadCloudHypervisors() {
+	h.cloudHypervisors = make(map[string]CloudHypervisor)
+	for i, c := range h.CloudProviders {
+		if c.isValid {
+			cmd := exec.Command("./glimpse",
+				"-auth-url", c.CloudAuthUrl,
+				"-user", c.CloudUser,
+				"-pass", c.CloudPassword,
+				"-tenant", c.CloudTenant,
+				"-provider", c.CloudType,
+				"list", "hypervisors")
+
+			cmdReader, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Printf("E! Error creating StdoutPipe for glimpse to list hypervisors: %s", err.Error())
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+			// read the data from stdout
+			buf := bufio.NewReader(cmdReader)
+
+			if err = cmd.Start(); err != nil {
+				log.Printf("E! Error starting glimpse to list hypervisors: %s", err.Error())
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+
+			output, _ := buf.ReadString('\n')
+			if err = cmd.Wait(); err != nil {
+				log.Printf("E! Error returned from glimpse to list hypervisors: %s - %s", err.Error(), output)
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+
+			var hypervisors CloudHypervisors
+			json.Unmarshal([]byte(output), &hypervisors)
+
+			log.Printf("I! Loading cloud hypervisor names from provider: %s", c.CloudAuthUrl)
+
+			for _, hypervisor := range hypervisors.Hypervisors {
+				h.cloudHypervisors[hypervisor.HostName] = hypervisor
+			}
 		}
 	}
 }
