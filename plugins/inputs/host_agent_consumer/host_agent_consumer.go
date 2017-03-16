@@ -40,12 +40,13 @@ type HostAgent struct {
 }
 
 type CloudProvider struct {
-	CloudAuthUrl  string
-	CloudUser     string
-	CloudPassword string
-	CloudTenant   string
-	CloudType     string
-	isValid       bool
+	Name     string
+	AuthUrl  string
+	User     string
+	Password string
+	Tenant   string
+	Provider string
+	isValid  bool
 }
 
 type CloudHypervisors struct {
@@ -75,20 +76,26 @@ type CloudNetworkPort struct {
 	NetworkName string `json:"network_name,required"`
 }
 
+const (
+	ovsUUID = "11111111-2222-3333-4444-555555555555"
+)
+
 var sampleConfig = `
   ## host agent subscriber port
   subscriberPort = 40003
   [[inputs.host_agent_consumer.cloudProviders]]
+    ## cloud name
+    name = "cloud1"
     ## cloud Auth URL string
-    cloudAuthUrl = "http://10.140.64.103:5000"
+    authUrl = "http://10.140.64.103:5000"
     ## cloud user name
-    cloudUser = "admin"
+    rser = "admin"
     ## cloud password
-    cloudPassword = "password"
+    password = "password"
     ## cloud tenant
-    cloudTenant = "admin"
-    ## cloud type
-    cloudType = "openstack"
+    tenant = "admin"
+    ## cloud provider
+    provider = "openstack"
 `
 
 func (h *HostAgent) SampleConfig() string {
@@ -233,6 +240,10 @@ func (h *HostAgent) processMessages() {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {
 									dimensions["instance_name"] = cloudInstance.Name
+								} else if *d.Value == ovsUUID {
+									cloudInstance = CloudInstance{*d.Value, "ovs"}
+									h.cloudInstances[*d.Value] = cloudInstance
+									dimensions["instance_name"] = cloudInstance.Name
 								} else {
 									// load cloud instance for missing instance
 									h.loadCloudInstance(*d.Value)
@@ -278,16 +289,16 @@ func (h *HostAgent) loadCloudHypervisors() {
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
-				"-auth-url", c.CloudAuthUrl,
-				"-user", c.CloudUser,
-				"-pass", c.CloudPassword,
-				"-tenant", c.CloudTenant,
-				"-provider", c.CloudType,
+				"-auth-url", c.AuthUrl,
+				"-user", c.User,
+				"-pass", c.Password,
+				"-tenant", c.Tenant,
+				"-provider", c.Provider,
 				"list", "hypervisors")
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list hypervisors: %s", err.Error())
+				log.Printf("E! Error creating StdoutPipe for glimpse to list hypervisors for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -295,14 +306,14 @@ func (h *HostAgent) loadCloudHypervisors() {
 			buf := bufio.NewReader(cmdReader)
 
 			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list hypervisors: %s", err.Error())
+				log.Printf("E! Error starting glimpse to list hypervisors for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
 			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list hypervisors: %s - %s", err.Error(), output)
+				log.Printf("E! Error returned from glimpse to list hypervisors for cloud %s: %s - %s", c.Name, err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -310,7 +321,7 @@ func (h *HostAgent) loadCloudHypervisors() {
 			var hypervisors CloudHypervisors
 			json.Unmarshal([]byte(output), &hypervisors)
 
-			log.Printf("I! Loading cloud hypervisor names from provider: %s", c.CloudAuthUrl)
+			log.Printf("I! Loading cloud hypervisor names from cloud: %s", c.Name)
 
 			for _, hypervisor := range hypervisors.Hypervisors {
 				h.cloudHypervisors[hypervisor.HostName] = hypervisor
@@ -324,16 +335,16 @@ func (h *HostAgent) loadCloudInstances() {
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
-				"-auth-url", c.CloudAuthUrl,
-				"-user", c.CloudUser,
-				"-pass", c.CloudPassword,
-				"-tenant", c.CloudTenant,
-				"-provider", c.CloudType,
+				"-auth-url", c.AuthUrl,
+				"-user", c.User,
+				"-pass", c.Password,
+				"-tenant", c.Tenant,
+				"-provider", c.Provider,
 				"list", "instances")
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list instances: %s", err.Error())
+				log.Printf("E! Error creating StdoutPipe for glimpse to list instances for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -341,14 +352,14 @@ func (h *HostAgent) loadCloudInstances() {
 			buf := bufio.NewReader(cmdReader)
 
 			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list instances: %s", err.Error())
+				log.Printf("E! Error starting glimpse to list instances for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
 			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list instances: %s - %s", err.Error(), output)
+				log.Printf("E! Error returned from glimpse to list instances for cloud %s: %s - %s", c.Name, err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -356,7 +367,7 @@ func (h *HostAgent) loadCloudInstances() {
 			var instances CloudInstances
 			json.Unmarshal([]byte(output), &instances)
 
-			log.Printf("I! Loading cloud instance names from provider: %s", c.CloudAuthUrl)
+			log.Printf("I! Loading cloud instance names from cloud %s", c.Name)
 
 			for _, instance := range instances.Instances {
 				h.cloudInstances[instance.Id] = instance
@@ -371,17 +382,17 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
-				"-auth-url", c.CloudAuthUrl,
-				"-user", c.CloudUser,
-				"-pass", c.CloudPassword,
-				"-tenant", c.CloudTenant,
-				"-provider", c.CloudType,
+				"-auth-url", c.AuthUrl,
+				"-user", c.User,
+				"-pass", c.Password,
+				"-tenant", c.Tenant,
+				"-provider", c.Provider,
 				"list", "instances",
 				"-inst-id", instanceId)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list instance %s: %s", instanceId, err.Error())
+				log.Printf("E! Error creating StdoutPipe for glimpse to list instance %s for cloud%s: %s", instanceId, c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -389,14 +400,14 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			buf := bufio.NewReader(cmdReader)
 
 			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list instance %s: %s", instanceId, err.Error())
+				log.Printf("E! Error starting glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
 			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list instance: %s - %s - %s", instanceId, err.Error(), output)
+				log.Printf("E! Error returned from glimpse to list instance for cloud %s: %s - %s - %s", instanceId, c.Name, err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -405,7 +416,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 			json.Unmarshal([]byte(output), &instances)
 
 			for _, instance := range instances.Instances {
-				log.Printf("I! Adding new cloud instance name from provier %s for instance id %s - instance name = %s", c.CloudAuthUrl, instanceId, instance.Name)
+				log.Printf("I! Adding new cloud instance name from cloud %s for instance id %s - instance name = %s", c.Name, instanceId, instance.Name)
 				h.cloudInstances[instance.Id] = instance
 			}
 		}
@@ -417,16 +428,16 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
-				"-auth-url", c.CloudAuthUrl,
-				"-user", c.CloudUser,
-				"-pass", c.CloudPassword,
-				"-tenant", c.CloudTenant,
-				"-provider", c.CloudType,
+				"-auth-url", c.AuthUrl,
+				"-user", c.User,
+				"-pass", c.Password,
+				"-tenant", c.Tenant,
+				"-provider", c.Provider,
 				"list", "network-ports")
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list network-ports: %s", err.Error())
+				log.Printf("E! Error creating StdoutPipe for glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -434,14 +445,14 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			buf := bufio.NewReader(cmdReader)
 
 			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list network-ports: %s", err.Error())
+				log.Printf("E! Error starting glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			output, _ := buf.ReadString('\n')
 			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list network-ports: %s - %s", err.Error(), output)
+				log.Printf("E! Error returned from glimpse to list network-ports for %s: %s - %s", c.Name, err.Error(), output)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -449,7 +460,7 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			var networkPorts CloudNetworkPorts
 			json.Unmarshal([]byte(output), &networkPorts)
 
-			log.Printf("I! Loading cloud network names from provider: %s", c.CloudAuthUrl)
+			log.Printf("I! Loading cloud network names from cloud %s", c.Name)
 
 			for _, networkPort := range networkPorts.NetworkPorts {
 				h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
