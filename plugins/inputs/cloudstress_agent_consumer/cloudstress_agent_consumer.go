@@ -387,7 +387,7 @@ func (c *CloudStressAgent) delta(srcKey string, metric string, value uint64) uin
 		c.deltaValues[srcKey] = make(map[string]uint64)
 	}
 	if _, ok := c.deltaValues[srcKey][metric]; ok == false {
-		c.deltaValues[srcKey][metric] = 0
+		c.deltaValues[srcKey][metric] = value
 	}
 	pv := c.deltaValues[srcKey][metric]
 	dv := value - pv
@@ -406,7 +406,7 @@ func (c *CloudStressAgent) iorate(currTime int64, srcKey string, metric string, 
 		c.deltaRates[srcKey][metric]["time"] = 0
 	}
 	if _, ok := c.deltaRates[srcKey][metric]["value"]; ok == false {
-		c.deltaRates[srcKey][metric]["value"] = 0
+		c.deltaRates[srcKey][metric]["value"] = int64(value)
 	}
 
 	pT := c.deltaRates[srcKey][metric]["time"]
