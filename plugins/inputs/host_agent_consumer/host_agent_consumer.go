@@ -30,7 +30,7 @@ type HostAgent struct {
 
 	cloudHypervisors  map[string]CloudHypervisor
 	cloudInstances    map[string]CloudInstance
-	cloudNetworkPorts map[string]CloudNetworkPort
+	cloudNetworkPorts []CloudNetworkPort
 
 	acc telegraf.Accumulator
 
@@ -258,18 +258,28 @@ func (h *HostAgent) processMessages() {
 								}
 							}
 							if *d.Name == "mac_addr" && *d.Value != "na" {
-								networkPort, ok := h.cloudNetworkPorts[*d.Value]
-								if ok {
-									dimensions["network_name"] = networkPort.NetworkName
-								} else {
+								found := false
+								for _,networkPort := range h.cloudNetworkPorts {
+									if networkPort.MacAddress == *d.Value {
+										dimensions["network_name"] = networkPort.NetworkName
+										found = true
+										break
+									}
+								}
+								if !found {
 									// reload cloud network ports - looks like new network was instantiated
 									h.loadCloudNetworkPorts()
-									networkPort, ok := h.cloudNetworkPorts[*d.Value]
-									if ok {
-										dimensions["network_name"] = networkPort.NetworkName
-									} else {
-										networkPort = CloudNetworkPort{*d.Value, "unknown"}
-										h.cloudNetworkPorts[*d.Value] = networkPort
+									found := false
+									for _,networkPort := range h.cloudNetworkPorts {
+										if networkPort.MacAddress == *d.Value {
+											dimensions["network_name"] = networkPort.NetworkName
+											found = true
+											break
+										}
+									}
+									if !found {
+										networkPort := CloudNetworkPort{*d.Value, "unknown"}
+										h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
 										dimensions["network_name"] = networkPort.NetworkName
 									}
 								}
@@ -424,7 +434,6 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 }
 
 func (h *HostAgent) loadCloudNetworkPorts() {
-	h.cloudNetworkPorts = make(map[string]CloudNetworkPort)
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
@@ -463,7 +472,7 @@ func (h *HostAgent) loadCloudNetworkPorts() {
 			log.Printf("I! Loading cloud network names from cloud %s", c.Name)
 
 			for _, networkPort := range networkPorts.NetworkPorts {
-				h.cloudNetworkPorts[networkPort.MacAddress] = networkPort
+				h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
 			}
 		}
 	}
