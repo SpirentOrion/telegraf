@@ -402,7 +402,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list instance %s for cloud%s: %s", instanceId, c.Name, err.Error())
+				log.Printf("E! Error creating StdoutPipe for glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -417,7 +417,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 
 			output, _ := buf.ReadString('\n')
 			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list instance for cloud %s: %s - %s - %s", instanceId, c.Name, err.Error(), output)
+				log.Printf("E! Error returned from glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
 				h.CloudProviders[i].isValid = false
 				continue
 			}
