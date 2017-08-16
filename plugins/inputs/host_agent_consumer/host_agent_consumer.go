@@ -402,7 +402,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 				"-tenant", c.Tenant,
 				"-provider", c.Provider,
 				"list", "instances",
-				"-inst-id", instanceId)
+				"-id", instanceId)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
