@@ -223,7 +223,7 @@ func (h *HostAgent) processMessages() {
 								if ok {
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								} else {
-									cloudHypervisor = CloudHypervisor{*d.Value, "unknown"}
+									cloudHypervisor = CloudHypervisor{"0.0.0.0", *d.Value}
 									h.cloudHypervisors[*d.Value] = cloudHypervisor
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								}
