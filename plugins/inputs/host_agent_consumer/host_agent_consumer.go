@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ type CloudHypervisors struct {
 }
 
 type CloudHypervisor struct {
-	HostIP string `json:"host_ip,required"`
+	HostIP   string `json:"host_ip,required"`
 	HostName string `json:"host_name,required"`
 }
 
@@ -213,17 +214,24 @@ func (h *HostAgent) processMessages() {
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
 						if *d.Name == "hostname" && len(*d.Value) > 0 {
-							cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
-							if ok {
-								dimensions["host_ip"] = cloudHypervisor.HostIP
-							} else {
+							found := false
+							for k, v := range h.cloudHypervisors {
+								if strings.HasPrefix(k, *d.Value) {
+									found = true
+									dimensions["host_ip"] = v.HostIP
+								}
+							}
+							if !found {
 								// reload cloud hypervisors - looks like new hypervisor came online
 								h.loadCloudHypervisors()
-								cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
-								if ok {
-									dimensions["host_ip"] = cloudHypervisor.HostIP
-								} else {
-									cloudHypervisor = CloudHypervisor{"0.0.0.0", *d.Value}
+								for k, v := range h.cloudHypervisors {
+									if strings.HasPrefix(k, *d.Value) {
+										found = true
+										dimensions["host_ip"] = v.HostIP
+									}
+								}
+								if !found {
+									cloudHypervisor := CloudHypervisor{"0.0.0.0", *d.Value}
 									h.cloudHypervisors[*d.Value] = cloudHypervisor
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								}
@@ -263,7 +271,7 @@ func (h *HostAgent) processMessages() {
 							}
 							if *d.Name == "mac_addr" && *d.Value != "na" {
 								found := false
-								for _,networkPort := range h.cloudNetworkPorts {
+								for _, networkPort := range h.cloudNetworkPorts {
 									if networkPort.MacAddress == *d.Value {
 										dimensions["network_name"] = networkPort.NetworkName
 										found = true
@@ -274,7 +282,7 @@ func (h *HostAgent) processMessages() {
 									// reload cloud network ports - looks like new network was instantiated
 									h.loadCloudNetworkPorts()
 									found := false
-									for _,networkPort := range h.cloudNetworkPorts {
+									for _, networkPort := range h.cloudNetworkPorts {
 										if networkPort.MacAddress == *d.Value {
 											dimensions["network_name"] = networkPort.NetworkName
 											found = true
