@@ -78,7 +78,11 @@ type CloudNetworkPort struct {
 }
 
 const (
-	ovsUUID = "11111111-2222-3333-4444-555555555555"
+	ovsUUID             = "11111111-2222-3333-4444-555555555555"
+	unknownMacAddr      = "00:00:00:00:00:00"
+	unknownIpAddr       = "0.0.0.0"
+	unknownInstanceName = "unknown"
+	unknownNetworkName  = "unknown"
 )
 
 var sampleConfig = `
@@ -231,7 +235,7 @@ func (h *HostAgent) processMessages() {
 									}
 								}
 								if !found {
-									cloudHypervisor := CloudHypervisor{"0.0.0.0", *d.Value}
+									cloudHypervisor := CloudHypervisor{unknownIpAddr, *d.Value}
 									h.cloudHypervisors[*d.Value] = cloudHypervisor
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								}
@@ -263,13 +267,13 @@ func (h *HostAgent) processMessages() {
 									if ok {
 										dimensions["instance_name"] = cloudInstance.Name
 									} else {
-										cloudInstance = CloudInstance{*d.Value, "unknown"}
+										cloudInstance = CloudInstance{*d.Value, unknownInstanceName}
 										h.cloudInstances[*d.Value] = cloudInstance
 										dimensions["instance_name"] = cloudInstance.Name
 									}
 								}
 							}
-							if *d.Name == "mac_addr" && *d.Value != "na" {
+							if *d.Name == "mac_addr" && *d.Value != unknownMacAddr {
 								found := false
 								for _, networkPort := range h.cloudNetworkPorts {
 									if networkPort.MacAddress == *d.Value {
@@ -290,7 +294,7 @@ func (h *HostAgent) processMessages() {
 										}
 									}
 									if !found {
-										networkPort := CloudNetworkPort{*d.Value, "unknown"}
+										networkPort := CloudNetworkPort{*d.Value, unknownNetworkName}
 										h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
 										dimensions["network_name"] = networkPort.NetworkName
 									}
