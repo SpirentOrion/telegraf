@@ -132,9 +132,11 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	}
 
 	// Initialize Cloud Hypervisors
+	h.cloudHypervisors = make(map[string]CloudHypervisor)
 	h.loadCloudHypervisors()
 
 	// Initialize Cloud Instances
+	h.cloudInstances = make(map[string]CloudInstance)
 	h.loadCloudInstances()
 
 	// Initialize Cloud Network Ports
@@ -311,7 +313,6 @@ func (h *HostAgent) processMessages() {
 }
 
 func (h *HostAgent) loadCloudHypervisors() {
-	h.cloudHypervisors = make(map[string]CloudHypervisor)
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
