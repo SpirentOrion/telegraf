@@ -78,6 +78,7 @@ type CloudNetworkPort struct {
 
 const (
 	ovsUUID = "11111111-2222-3333-4444-555555555555"
+	avsUUID = "11111111-2222-3333-4444-555555555556"
 )
 
 var sampleConfig = `
@@ -242,6 +243,10 @@ func (h *HostAgent) processMessages() {
 									dimensions["instance_name"] = cloudInstance.Name
 								} else if *d.Value == ovsUUID {
 									cloudInstance = CloudInstance{*d.Value, "ovs"}
+									h.cloudInstances[*d.Value] = cloudInstance
+									dimensions["instance_name"] = cloudInstance.Name
+								} else if *d.Value == avsUUID {
+									cloudInstance = CloudInstance{*d.Value, "avs"}
 									h.cloudInstances[*d.Value] = cloudInstance
 									dimensions["instance_name"] = cloudInstance.Name
 								} else {
