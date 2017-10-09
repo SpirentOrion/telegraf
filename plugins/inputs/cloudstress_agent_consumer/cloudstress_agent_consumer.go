@@ -166,7 +166,13 @@ func (c *CloudStressAgent) processMessages() {
 			tags["uuid"] = updateMsg.GetUuid()
 
 			for _, d := range updateMsg.Tags {
-				tags[*d.Key] = *d.Value
+				for i, v := range d.Values {
+					if i == 0 {
+						tags[*d.Key] = v
+					} else {
+						tags[*d.Key] = tags[*d.Key] + ";" + v
+					}
+				}
 			}
 
 			timestamp := int64(updateMsg.GetTimestamp())

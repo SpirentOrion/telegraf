@@ -1,3 +1,5 @@
+syntax = "proto2";
+
 package result;
 
 message CpuLoad {
@@ -25,9 +27,9 @@ message IOLoad {
   required IOStats Write = 2;
 }
 
-message KeyValuePair {
-  required string key   = 1;
-  required string value = 2;
+message Multimap {
+  required string key    = 1;
+  repeated string values = 2;
 }
 
 message Update {
@@ -38,12 +40,12 @@ message Update {
     NETWORK = 3;
   }
   optional string uuid       = 1;    // provides identity of sender
-  required double timestamp  = 2;    // seconds since boot
+  required double timestamp  = 2;    // unix timestamp, e.g. seconds since Jan 1, 1970 UTC
   required uint64 sequence   = 3;    // sequence number for this update type
   required UpdateType type   = 4;    // type of update; indicates whether CpuLoad
                                      // or IOLoad message is present
   optional CpuLoad cpu       = 5;    // only present for CPU results
   optional IOLoad io         = 6;    // only present for BLOCK, MEMORY, or NETWORK results
 
-  repeated KeyValuePair tags = 101;  // tags (dimensions) for result data
+  repeated Multimap     tags = 102;  // multitags for result data
 }

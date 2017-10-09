@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,8 +78,12 @@ type CloudNetworkPort struct {
 }
 
 const (
-	ovsUUID = "11111111-2222-3333-4444-555555555555"
-	avsUUID = "11111111-2222-3333-4444-555555555556"
+	ovsUUID             = "11111111-2222-3333-4444-555555555555"
+	avsUUID             = "11111111-2222-3333-4444-555555555556"
+	unknownMacAddr      = "00:00:00:00:00:00"
+	unknownIpAddr       = "0.0.0.0"
+	unknownInstanceName = "unknown"
+	unknownNetworkName  = "unknown"
 )
 
 var sampleConfig = `
@@ -128,9 +133,11 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	}
 
 	// Initialize Cloud Hypervisors
+	h.cloudHypervisors = make(map[string]CloudHypervisor)
 	h.loadCloudHypervisors()
 
 	// Initialize Cloud Instances
+	h.cloudInstances = make(map[string]CloudInstance)
 	h.loadCloudInstances()
 
 	// Initialize Cloud Network Ports
@@ -214,29 +221,40 @@ func (h *HostAgent) processMessages() {
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
 						if *d.Name == "hostname" && len(*d.Value) > 0 {
-							cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
-							if ok {
-								dimensions["host_ip"] = cloudHypervisor.HostIP
-							} else {
+							found := false
+							for k, v := range h.cloudHypervisors {
+								if strings.HasPrefix(k, *d.Value) {
+									found = true
+									dimensions["host_ip"] = v.HostIP
+								}
+							}
+							if !found {
 								// reload cloud hypervisors - looks like new hypervisor came online
 								h.loadCloudHypervisors()
-								cloudHypervisor, ok := h.cloudHypervisors[*d.Value]
-								if ok {
-									dimensions["host_ip"] = cloudHypervisor.HostIP
-								} else {
-									cloudHypervisor = CloudHypervisor{*d.Value, "unknown"}
+								for k, v := range h.cloudHypervisors {
+									if strings.HasPrefix(k, *d.Value) {
+										found = true
+										dimensions["host_ip"] = v.HostIP
+									}
+								}
+								if !found {
+									cloudHypervisor := CloudHypervisor{unknownIpAddr, *d.Value}
 									h.cloudHypervisors[*d.Value] = cloudHypervisor
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								}
 							}
 						}
 						if *metric.Name == "host_proc_metrics" ||
-							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "intel_pcm_core_metrics" ||
+							*metric.Name == "libvirt_domain_metrics" ||
+							*metric.Name == "libvirt_domain_core_metrics" ||
 							*metric.Name == "libvirt_domain_block_metrics" ||
 							*metric.Name == "libvirt_domain_interface_metrics" ||
 							*metric.Name == "vswitch_interface_metrics" ||
-							*metric.Name == "vswitch_dpdk_interface_metrics" {
+							*metric.Name == "vswitch_dpdk_interface_metrics" ||
+							*metric.Name == "avs_vswitch_interface_metrics" ||
+							*metric.Name == "avs_vswitch_port_metrics" ||
+							*metric.Name == "avs_vswitch_port_queue_metrics" {
 							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {
@@ -256,13 +274,13 @@ func (h *HostAgent) processMessages() {
 									if ok {
 										dimensions["instance_name"] = cloudInstance.Name
 									} else {
-										cloudInstance = CloudInstance{*d.Value, "unknown"}
+										cloudInstance = CloudInstance{*d.Value, unknownInstanceName}
 										h.cloudInstances[*d.Value] = cloudInstance
 										dimensions["instance_name"] = cloudInstance.Name
 									}
 								}
 							}
-							if *d.Name == "mac_addr" && *d.Value != "na" {
+							if *d.Name == "mac_addr" && *d.Value != unknownMacAddr {
 								found := false
 								for _, networkPort := range h.cloudNetworkPorts {
 									if networkPort.MacAddress == *d.Value {
@@ -283,7 +301,7 @@ func (h *HostAgent) processMessages() {
 										}
 									}
 									if !found {
-										networkPort := CloudNetworkPort{*d.Value, "unknown"}
+										networkPort := CloudNetworkPort{*d.Value, unknownNetworkName}
 										h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
 										dimensions["network_name"] = networkPort.NetworkName
 									}
@@ -300,7 +318,6 @@ func (h *HostAgent) processMessages() {
 }
 
 func (h *HostAgent) loadCloudHypervisors() {
-	h.cloudHypervisors = make(map[string]CloudHypervisor)
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
@@ -403,7 +420,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 				"-tenant", c.Tenant,
 				"-provider", c.Provider,
 				"list", "instances",
-				"-inst-id", instanceId)
+				"-id", instanceId)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
