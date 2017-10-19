@@ -34,10 +34,11 @@ message Multimap {
 
 message Update {
   enum UpdateType {
-    CPU     = 0;
-    BLOCK   = 1;
-    MEMORY  = 2;
-    NETWORK = 3;
+    UNKNOWN_TYPE = 0;
+    CPU          = 1;
+    BLOCK        = 2;
+    MEMORY       = 3;
+    NETWORK      = 4;
   }
   string uuid       = 1;    // provides identity of sender
   double timestamp  = 2;    // unix timestamp, e.g. seconds since Jan 1, 1970 UTC
