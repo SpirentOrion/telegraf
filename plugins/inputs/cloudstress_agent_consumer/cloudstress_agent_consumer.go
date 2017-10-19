@@ -168,9 +168,9 @@ func (c *CloudStressAgent) processMessages() {
 			for _, d := range updateMsg.Tags {
 				for i, v := range d.Values {
 					if i == 0 {
-						tags[*d.Key] = v
+						tags[d.Key] = v
 					} else {
-						tags[*d.Key] = tags[*d.Key] + ";" + v
+						tags[d.Key] = tags[d.Key] + ";" + v
 					}
 				}
 			}
