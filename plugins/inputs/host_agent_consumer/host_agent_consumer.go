@@ -80,6 +80,7 @@ type CloudNetworkPort struct {
 const (
 	ovsUUID             = "11111111-2222-3333-4444-555555555555"
 	avsUUID             = "11111111-2222-3333-4444-555555555556"
+	unknownLibvirtUUID  = "00000000-0000-0000-0000-000000000000"
 	unknownMacAddr      = "00:00:00:00:00:00"
 	unknownIpAddr       = "0.0.0.0"
 	unknownInstanceName = "unknown"
@@ -255,7 +256,7 @@ func (h *HostAgent) processMessages() {
 							*metric.Name == "avs_vswitch_interface_metrics" ||
 							*metric.Name == "avs_vswitch_port_metrics" ||
 							*metric.Name == "avs_vswitch_port_queue_metrics" {
-							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 {
+							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 && *d.Value != unknownLibvirtUUID {
 								cloudInstance, ok := h.cloudInstances[*d.Value]
 								if ok {
 									dimensions["instance_name"] = cloudInstance.Name
@@ -363,7 +364,6 @@ func (h *HostAgent) loadCloudHypervisors() {
 }
 
 func (h *HostAgent) loadCloudInstances() {
-	h.cloudInstances = make(map[string]CloudInstance)
 	for i, c := range h.CloudProviders {
 		if c.isValid {
 			cmd := exec.Command("./glimpse",
