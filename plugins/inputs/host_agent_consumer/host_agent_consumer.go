@@ -224,7 +224,7 @@ func (h *HostAgent) processMessages() {
 						if *d.Name == "hostname" && len(*d.Value) > 0 {
 							found := false
 							for k, v := range h.cloudHypervisors {
-								if strings.HasPrefix(k, *d.Value) {
+								if strings.HasPrefix(strings.ToLower(k), strings.ToLower(*d.Value)) {
 									found = true
 									dimensions["host_ip"] = v.HostIP
 								}
