@@ -247,6 +247,7 @@ func (h *HostAgent) processMessages() {
 						}
 						if *metric.Name == "host_proc_metrics" ||
 							*metric.Name == "intel_pcm_core_metrics" ||
+							*metric.Name == "intel_rdt_core_metrics" ||
 							*metric.Name == "libvirt_domain_metrics" ||
 							*metric.Name == "libvirt_domain_core_metrics" ||
 							*metric.Name == "libvirt_domain_block_metrics" ||
