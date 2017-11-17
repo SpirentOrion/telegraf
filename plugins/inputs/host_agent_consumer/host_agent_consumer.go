@@ -125,9 +125,30 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.prevTime = time.Now()
 	h.prevValue = 0
 
-	h.subscriber, _ = zmq.NewSocket(zmq.SUB)
-	h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
-	h.subscriber.SetSubscribe("")
+	subscriber, err := zmq.NewSocket(zmq.SUB)
+	if err != nil {
+		log.Printf("E! Unable to create subscriber socket: %s", err.Error())
+		return err
+	}
+	h.subscriber = subscriber
+
+	err = h.subscriber.SetIpv6(true)
+	if err != nil {
+		log.Printf("E! Unable to set IPv6 on subscriber socket: %s", err.Error())
+		return err
+	}
+
+	err = h.subscriber.Bind("tcp://*:" + strconv.Itoa(h.SubscriberPort))
+	if err != nil {
+		log.Printf("E! Unable to bind to subscriber port %s: %s", "tcp://*:"+strconv.Itoa(h.SubscriberPort), err.Error())
+		return err
+	}
+
+	err = h.subscriber.SetSubscribe("")
+	if err != nil {
+		log.Printf("E! Unable to subscribe on subscriber socket: %s", err.Error())
+		return err
+	}
 
 	for i, _ := range h.CloudProviders {
 		h.CloudProviders[i].isValid = true
