@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"log"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -29,9 +31,10 @@ type HostAgent struct {
 	msgs chan []string
 	done chan struct{}
 
-	cloudHypervisors  map[string]CloudHypervisor
-	cloudInstances    map[string]CloudInstance
-	cloudNetworkPorts []CloudNetworkPort
+	cloudHypervisors           map[string]CloudHypervisor
+	cloudInstances             map[string]CloudInstance
+	cloudMacAddrNetworkMap     atomic.Value    // mac to network map.  replaced when updated
+	cloudMacAddrNetworkUpdated CloudUpdateTime // last time openstack network was updated
 
 	acc telegraf.Accumulator
 
@@ -55,8 +58,9 @@ type CloudHypervisors struct {
 }
 
 type CloudHypervisor struct {
-	HostIP   string `json:"host_ip,required"`
-	HostName string `json:"host_name,required"`
+	HostIP    string `json:"host_ip,required"`
+	HostName  string `json:"host_name,required"`
+	CloudName string
 }
 
 type CloudInstances struct {
@@ -77,6 +81,10 @@ type CloudNetworkPort struct {
 	NetworkName string `json:"network_name,required"`
 }
 
+type CloudMacAddrNetworkMap map[string]CloudNetworkPort
+
+type CloudUpdateTime map[string]time.Time
+
 const (
 	ovsUUID             = "11111111-2222-3333-4444-555555555555"
 	avsUUID             = "11111111-2222-3333-4444-555555555556"
@@ -85,6 +93,7 @@ const (
 	unknownIpAddr       = "0.0.0.0"
 	unknownInstanceName = "unknown"
 	unknownNetworkName  = "unknown"
+	allClouds           = "_ALL_CLOUDS_"
 )
 
 var sampleConfig = `
@@ -163,7 +172,10 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 	h.loadCloudInstances()
 
 	// Initialize Cloud Network Ports
-	h.loadCloudNetworkPorts()
+	netPortMap := make(CloudMacAddrNetworkMap)
+	h.updateCloudNetworkPorts(&netPortMap, []string{allClouds})
+	h.cloudMacAddrNetworkMap.Store(netPortMap)
+	h.cloudMacAddrNetworkUpdated = make(CloudUpdateTime)
 
 	// Start the zmq message subscriber
 	go h.subscribe()
@@ -240,9 +252,11 @@ func (h *HostAgent) processMessages() {
 						}
 					}
 					dimensions := make(map[string]string)
+					hostName := ""
 					for _, d := range metric.Dimensions {
 						dimensions[*d.Name] = *d.Value
 						if *d.Name == "hostname" && len(*d.Value) > 0 {
+							hostName = *d.Value
 							found := false
 							for k, v := range h.cloudHypervisors {
 								if strings.HasPrefix(strings.ToLower(k), strings.ToLower(*d.Value)) {
@@ -260,7 +274,7 @@ func (h *HostAgent) processMessages() {
 									}
 								}
 								if !found {
-									cloudHypervisor := CloudHypervisor{unknownIpAddr, *d.Value}
+									cloudHypervisor := CloudHypervisor{unknownIpAddr, *d.Value, ""}
 									h.cloudHypervisors[*d.Value] = cloudHypervisor
 									dimensions["host_ip"] = cloudHypervisor.HostIP
 								}
@@ -303,32 +317,21 @@ func (h *HostAgent) processMessages() {
 									}
 								}
 							}
-							if *d.Name == "mac_addr" && *d.Value != unknownMacAddr {
-								found := false
-								for _, networkPort := range h.cloudNetworkPorts {
-									if networkPort.MacAddress == *d.Value {
-										dimensions["network_name"] = networkPort.NetworkName
-										found = true
-										break
-									}
+						}
+					}
+					if macAddr, ok := dimensions["mac_addr"]; ok {
+						if len(hostName) > 0 {
+							networkPort, ok := h.getCloudMacAddrNetwork(macAddr)
+							if ok {
+								dimensions["network_name"] = networkPort.NetworkName
+							} else {
+								// reload cloud network ports - looks like new network was instantiated
+								cloudNames := h.getHypervisorCloudNames(hostName)
+								if len(cloudNames) == 0 {
+									cloudNames = append(cloudNames, allClouds)
 								}
-								if !found {
-									// reload cloud network ports - looks like new network was instantiated
-									h.loadCloudNetworkPorts()
-									found := false
-									for _, networkPort := range h.cloudNetworkPorts {
-										if networkPort.MacAddress == *d.Value {
-											dimensions["network_name"] = networkPort.NetworkName
-											found = true
-											break
-										}
-									}
-									if !found {
-										networkPort := CloudNetworkPort{*d.Value, unknownNetworkName}
-										h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
-										dimensions["network_name"] = networkPort.NetworkName
-									}
-								}
+								networkPort := h.updateCloudNetworkPort(macAddr, cloudNames)
+								dimensions["network_name"] = networkPort.NetworkName
 							}
 						}
 					}
@@ -379,6 +382,7 @@ func (h *HostAgent) loadCloudHypervisors() {
 			log.Printf("I! Loading cloud hypervisor names from cloud: %s", c.Name)
 
 			for _, hypervisor := range hypervisors.Hypervisors {
+				hypervisor.CloudName = c.Name
 				h.cloudHypervisors[hypervisor.HostName] = hypervisor
 			}
 		}
@@ -477,49 +481,133 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 	}
 }
 
-func (h *HostAgent) loadCloudNetworkPorts() {
+func (h *HostAgent) updateCloudNetworkPorts(netPortMap *CloudMacAddrNetworkMap, cloudNames []string) {
 	for i, c := range h.CloudProviders {
-		if c.isValid {
-			cmd := exec.Command("./glimpse",
-				"-auth-url", c.AuthUrl,
-				"-user", c.User,
-				"-pass", c.Password,
-				"-tenant", c.Tenant,
-				"-provider", c.Provider,
-				"list", "network-ports")
-
-			cmdReader, err := cmd.StdoutPipe()
-			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
+		if !c.isValid {
+			continue
+		}
+		if len(cloudNames) > 0 {
+			found := false
+			for _, cloudName := range cloudNames {
+				if cloudName == allClouds || c.Name == cloudName {
+					found = true
+					break
+				}
+			}
+			if !found {
 				continue
 			}
-			// read the data from stdout
-			buf := bufio.NewReader(cmdReader)
+		}
 
-			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
+		cmd := exec.Command("./glimpse",
+			"-auth-url", c.AuthUrl,
+			"-user", c.User,
+			"-pass", c.Password,
+			"-tenant", c.Tenant,
+			"-provider", c.Provider,
+			"list", "network-ports")
 
-			output, _ := buf.ReadString('\n')
-			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list network-ports for %s: %s - %s", c.Name, err.Error(), output)
-				h.CloudProviders[i].isValid = false
-				continue
-			}
+		cmdReader, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("E! Error creating StdoutPipe for glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
+			h.CloudProviders[i].isValid = false
+			continue
+		}
+		// read the data from stdout
+		buf := bufio.NewReader(cmdReader)
 
-			var networkPorts CloudNetworkPorts
-			json.Unmarshal([]byte(output), &networkPorts)
+		if err = cmd.Start(); err != nil {
+			log.Printf("E! Error starting glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
+			h.CloudProviders[i].isValid = false
+			continue
+		}
 
-			log.Printf("I! Loading cloud network names from cloud %s", c.Name)
+		output, _ := buf.ReadString('\n')
+		if err = cmd.Wait(); err != nil {
+			log.Printf("E! Error returned from glimpse to list network-ports for %s: %s - %s", c.Name, err.Error(), output)
+			h.CloudProviders[i].isValid = false
+			continue
+		}
 
-			for _, networkPort := range networkPorts.NetworkPorts {
-				h.cloudNetworkPorts = append(h.cloudNetworkPorts, networkPort)
+		var networkPorts CloudNetworkPorts
+		json.Unmarshal([]byte(output), &networkPorts)
+
+		log.Printf("I! Loading cloud network names from cloud %s", c.Name)
+		for _, networkPort := range networkPorts.NetworkPorts {
+			if _, ok := (*netPortMap)[networkPort.MacAddress]; !ok {
+				(*netPortMap)[networkPort.MacAddress] = networkPort
 			}
 		}
 	}
+}
+
+func (h *HostAgent) getCloudMacAddrNetworkMap() CloudMacAddrNetworkMap {
+	return h.cloudMacAddrNetworkMap.Load().(CloudMacAddrNetworkMap)
+}
+
+func (h *HostAgent) getCloudMacAddrNetwork(macAddr string) (CloudNetworkPort, bool) {
+	netPortMap := h.getCloudMacAddrNetworkMap()
+	v, ok := netPortMap[macAddr]
+	return v, ok
+}
+
+func (h *HostAgent) getHypervisorCloudNames(hostName string) []string {
+	cloudNames := []string{}
+	lcHostName := strings.ToLower(hostName)
+	for _, v := range h.cloudHypervisors {
+		// unlikely but in case there are multiple hypervisors with the same hostname in the organization collect all clouds
+		if strings.HasPrefix(lcHostName, strings.ToLower(v.HostName)) {
+			if len(v.CloudName) > 0 {
+				cloudNames = append(cloudNames, v.CloudName)
+			}
+		}
+	}
+	return cloudNames
+}
+
+func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) CloudNetworkPort {
+	currTime := time.Now()
+
+	h.Lock()
+	defer h.Unlock()
+	var networkPort CloudNetworkPort
+	var ok bool
+
+	netPortMap := h.getCloudMacAddrNetworkMap()
+	if networkPort, ok = netPortMap[macAddr]; ok {
+		return networkPort
+	}
+
+	maxRefreshSecs := 5.0
+	refresh := false
+	for _, cloudName := range cloudNames {
+		lastTime, lastTimeOk := h.cloudMacAddrNetworkUpdated[cloudName]
+		if !lastTimeOk || (math.Abs(lastTime.Sub(currTime).Seconds()) >= maxRefreshSecs) {
+			refresh = true
+			break
+		}
+	}
+
+	newNetPortMap := make(CloudMacAddrNetworkMap)
+	for k, v := range netPortMap {
+		newNetPortMap[k] = v
+	}
+	if refresh {
+		h.updateCloudNetworkPorts(&newNetPortMap, cloudNames)
+		for _, cloudName := range cloudNames {
+			h.cloudMacAddrNetworkUpdated[cloudName] = currTime
+		}
+	} else {
+		for _, cloudName := range cloudNames {
+			log.Printf("D! Skipping cloud network update for cloud %s. Last network update was less than %f seconds from this refresh request", cloudName, maxRefreshSecs)
+		}
+	}
+	if networkPort, ok = newNetPortMap[macAddr]; !ok {
+		networkPort = CloudNetworkPort{macAddr, unknownNetworkName}
+		newNetPortMap[macAddr] = networkPort
+	}
+	h.cloudMacAddrNetworkMap.Store(newNetPortMap)
+	return networkPort
 }
 
 func init() {
