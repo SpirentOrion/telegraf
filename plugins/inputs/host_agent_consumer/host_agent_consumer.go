@@ -50,6 +50,7 @@ type CloudProvider struct {
 	Password string
 	Tenant   string
 	Provider string
+	Addr     string
 	isValid  bool
 }
 
@@ -105,13 +106,15 @@ var sampleConfig = `
     ## cloud Auth URL string
     authUrl = "http://10.140.64.103:5000"
     ## cloud user name
-    rser = "admin"
+    user = "admin"
     ## cloud password
     password = "password"
     ## cloud tenant
     tenant = "admin"
     ## cloud provider
     provider = "openstack"
+    ## cloud Addr
+    addr = "10.140.64.103"
 `
 
 func (h *HostAgent) SampleConfig() string {
@@ -159,7 +162,7 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 		return err
 	}
 
-	for i, _ := range h.CloudProviders {
+	for i := range h.CloudProviders {
 		h.CloudProviders[i].isValid = true
 	}
 
@@ -344,15 +347,16 @@ func (h *HostAgent) processMessages() {
 }
 
 func (h *HostAgent) loadCloudHypervisors() {
+	glimpsePath := h.glimpsePath()
 	for i, c := range h.CloudProviders {
 		if c.isValid {
-			cmd := exec.Command("./glimpse",
-				"-auth-url", c.AuthUrl,
-				"-user", c.User,
-				"-pass", c.Password,
-				"-tenant", c.Tenant,
-				"-provider", c.Provider,
-				"list", "hypervisors")
+			a, err := h.glimpseArgs(c, "list", "hypervisors")
+			if err != nil {
+				log.Printf("E! Error getting glimpse cloud %s hypervisors: %s", c.Name, err.Error())
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+			cmd := exec.Command(glimpsePath, a...)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
@@ -390,15 +394,16 @@ func (h *HostAgent) loadCloudHypervisors() {
 }
 
 func (h *HostAgent) loadCloudInstances() {
+	glimpsePath := h.glimpsePath()
 	for i, c := range h.CloudProviders {
 		if c.isValid {
-			cmd := exec.Command("./glimpse",
-				"-auth-url", c.AuthUrl,
-				"-user", c.User,
-				"-pass", c.Password,
-				"-tenant", c.Tenant,
-				"-provider", c.Provider,
-				"list", "instances")
+			a, err := h.glimpseArgs(c, "list", "instances")
+			if err != nil {
+				log.Printf("E! Error getting glimpse cloud %s instances: %s", c.Name, err.Error())
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+			cmd := exec.Command(glimpsePath, a...)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
@@ -437,16 +442,16 @@ func (h *HostAgent) loadCloudInstances() {
 func (h *HostAgent) loadCloudInstance(instanceId string) {
 	h.Lock()
 	defer h.Unlock()
+	glimpsePath := h.glimpsePath()
 	for i, c := range h.CloudProviders {
 		if c.isValid {
-			cmd := exec.Command("./glimpse",
-				"-auth-url", c.AuthUrl,
-				"-user", c.User,
-				"-pass", c.Password,
-				"-tenant", c.Tenant,
-				"-provider", c.Provider,
-				"list", "instances",
-				"-id", instanceId)
+			a, err := h.glimpseArgs(c, "list", "instances", "-id", instanceId)
+			if err != nil {
+				log.Printf("E! Error getting glimpse cloud %s instances: %s", c.Name, err.Error())
+				h.CloudProviders[i].isValid = false
+				continue
+			}
+			cmd := exec.Command(glimpsePath, a...)
 
 			cmdReader, err := cmd.StdoutPipe()
 			if err != nil {
@@ -482,6 +487,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string) {
 }
 
 func (h *HostAgent) updateCloudNetworkPorts(netPortMap *CloudMacAddrNetworkMap, cloudNames []string) {
+	glimpsePath := h.glimpsePath()
 	for i, c := range h.CloudProviders {
 		if !c.isValid {
 			continue
@@ -498,14 +504,13 @@ func (h *HostAgent) updateCloudNetworkPorts(netPortMap *CloudMacAddrNetworkMap, 
 				continue
 			}
 		}
-
-		cmd := exec.Command("./glimpse",
-			"-auth-url", c.AuthUrl,
-			"-user", c.User,
-			"-pass", c.Password,
-			"-tenant", c.Tenant,
-			"-provider", c.Provider,
-			"list", "network-ports")
+		a, err := h.glimpseArgs(c, "list", "network-ports")
+		if err != nil {
+			log.Printf("E! Error getting glimpse cloud %s network-ports: %s", c.Name, err.Error())
+			h.CloudProviders[i].isValid = false
+			continue
+		}
+		cmd := exec.Command(glimpsePath, a...)
 
 		cmdReader, err := cmd.StdoutPipe()
 		if err != nil {
@@ -608,6 +613,32 @@ func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) 
 	}
 	h.cloudMacAddrNetworkMap.Store(newNetPortMap)
 	return networkPort
+}
+
+func (h HostAgent) glimpsePath() string {
+	return "./glimpse"
+}
+
+func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error) {
+	a := []string{
+		"-provider", c.Provider,
+	}
+	if c.AuthUrl != "" {
+		a = append(a, "-auth-url", c.AuthUrl)
+	}
+	if c.User != "" {
+		a = append(a, "-user", c.User)
+	}
+	if c.Password != "" {
+		a = append(a, "-pass", c.Password)
+	}
+	if c.Tenant != "" {
+		a = append(a, "-tenant", c.Tenant)
+	}
+	if c.Addr != "" {
+		a = append(a, "-addr", c.Addr)
+	}
+	return append(a, args...), nil
 }
 
 func init() {
