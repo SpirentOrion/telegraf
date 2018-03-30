@@ -1,8 +1,9 @@
 package host_agent_consumer
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGlimpseArgs(t *testing.T) {
@@ -12,13 +13,14 @@ func TestGlimpseArgs(t *testing.T) {
 		User:     "username",
 		Password: "mypassword",
 		Tenant:   "admin",
+		Region:   "RegionOne",
 		Provider: "Openstack",
 		Addr:     "1.0.0.1",
 		isValid:  true,
 	}
 	a, err := h.glimpseArgs(c, "list", "hypervisors")
 	assert.Equal(t, err, nil)
-	assert.Equal(t, len(a), 14)
+	assert.Equal(t, len(a), 16)
 
 	c = CloudProvider{
 		Provider: "Host-Metrics-Agent",

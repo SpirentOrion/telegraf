@@ -49,6 +49,7 @@ type CloudProvider struct {
 	User     string
 	Password string
 	Tenant   string
+	Region   string
 	Provider string
 	Addr     string
 	isValid  bool
@@ -111,6 +112,8 @@ var sampleConfig = `
     password = "password"
     ## cloud tenant
     tenant = "admin"
+    ## cloud region
+    region = "RegionOne"
     ## cloud provider
     provider = "openstack"
     ## cloud Addr
@@ -634,6 +637,9 @@ func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error
 	}
 	if c.Tenant != "" {
 		a = append(a, "-tenant", c.Tenant)
+	}
+	if c.Region != "" {
+		a = append(a, "-region", c.Region)
 	}
 	if c.Addr != "" {
 		a = append(a, "-addr", c.Addr)
