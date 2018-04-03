@@ -8,7 +8,6 @@ build:
 
 # Get dependencies and use gdm to checkout changesets
 prepare:
-	go get github.com/sparrc/gdm
 	echo "vendoring orion-res packages..."
 	cd .. && \
 	gdm vendor -f ./magellan/Godeps && \
