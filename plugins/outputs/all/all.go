@@ -14,6 +14,7 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/outputs/kafka"
 	_ "github.com/influxdata/telegraf/plugins/outputs/kinesis"
 	_ "github.com/influxdata/telegraf/plugins/outputs/librato"
+	_ "github.com/influxdata/telegraf/plugins/outputs/magellan"
 	_ "github.com/influxdata/telegraf/plugins/outputs/mqtt"
 	_ "github.com/influxdata/telegraf/plugins/outputs/nats"
 	_ "github.com/influxdata/telegraf/plugins/outputs/nsq"
