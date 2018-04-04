@@ -33,10 +33,18 @@ build-for-docker:
 package:
 	./scripts/build.py --package --version="$(VERSION)" --platform=linux --arch=all --upload
 
-# Get dependencies and use gdm to checkout changesets
+# Migrate to govendor to support package level dependencies
+# govendor vendor.json should be checked in. Only use this target to rerun migration from Godep if telegraf rebased
+migrate:
+	rm -rf ./vendor
+	git checkout Godeps
+	govendor migrate gdm 
+	git checkout Godeps
+	cd magellan && make migrate
+
+# Get dependencies and use govendor to checkout changesets
 prepare:
-	go get -u github.com/sparrc/gdm
-	gdm vendor -f Godeps
+	govendor sync
 	cd magellan && make prepare
 
 # Use the windows godeps file to prepare dependencies
