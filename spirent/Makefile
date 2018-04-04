@@ -17,4 +17,4 @@ prepare:
 # Setup govendor dependencies 
 migrate:
 	cd .. && \
-	./magellan/govendor.sh
+	./spirent/govendor.sh

@@ -40,12 +40,12 @@ migrate:
 	git checkout Godeps
 	govendor migrate gdm 
 	git checkout Godeps
-	cd magellan && make migrate
+	cd spirent && make migrate
 
 # Get dependencies and use govendor to checkout changesets
 prepare:
 	govendor sync
-	cd magellan && make prepare
+	cd spirent && make prepare
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
