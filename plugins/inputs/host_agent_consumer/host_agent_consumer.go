@@ -179,7 +179,7 @@ func (h *HostAgent) Start(acc telegraf.Accumulator) error {
 
 	// Initialize Cloud Network Ports
 	netPortMap := make(CloudMacAddrNetworkMap)
-	h.updateCloudNetworkPorts(&netPortMap, []string{})
+	h.updateCloudNetworkPorts(netPortMap, []string{})
 	h.cloudMacAddrNetworkMapStore(netPortMap)
 	h.cloudMacAddrNetworkUpdated = make(CloudUpdateTime)
 
@@ -443,8 +443,7 @@ func (h *HostAgent) loadCloudInstances() {
 func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 	h.Lock()
 	defer h.Unlock()
-	_, ok := h.cloudInstance(instanceId)
-	if ok {
+	if _, ok := h.cloudInstance(instanceId); ok {
 		return
 	}
 
@@ -507,7 +506,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 	}
 }
 
-func (h *HostAgent) updateCloudNetworkPorts(netPortMap *CloudMacAddrNetworkMap, cloudNames []string) {
+func (h *HostAgent) updateCloudNetworkPorts(netPortMap CloudMacAddrNetworkMap, cloudNames []string) {
 	glimpsePath := h.glimpsePath()
 	for i, c := range h.CloudProviders {
 		if !c.isValid {
@@ -561,8 +560,8 @@ func (h *HostAgent) updateCloudNetworkPorts(netPortMap *CloudMacAddrNetworkMap, 
 		log.Printf("I! Loading cloud network names from cloud %s", c.Name)
 		for ni := range networkPorts.NetworkPorts {
 			networkPort := &networkPorts.NetworkPorts[ni]
-			if _, ok := (*netPortMap)[networkPort.MacAddress]; !ok {
-				(*netPortMap)[networkPort.MacAddress] = networkPort
+			if _, ok := netPortMap[networkPort.MacAddress]; !ok {
+				netPortMap[networkPort.MacAddress] = networkPort
 			}
 		}
 	}
@@ -640,7 +639,7 @@ func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) 
 		newNetPortMap[k] = v
 	}
 	if refresh {
-		h.updateCloudNetworkPorts(&newNetPortMap, cloudNames)
+		h.updateCloudNetworkPorts(newNetPortMap, cloudNames)
 		for _, cloudName := range cloudNames {
 			h.cloudMacAddrNetworkUpdated[cloudName] = currTime
 		}
