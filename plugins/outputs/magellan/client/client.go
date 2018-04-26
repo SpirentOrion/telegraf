@@ -64,25 +64,16 @@ func (c *client) UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.R
 	}
 
 	db, ctx, err := c.Client.UpdateDatabase(ctx, c.dbId, db)
-	if err != nil {
-		log.Fatal(err)
-	}
 	return err
 }
 
 func (c *client) WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error {
 	ctx, err := c.Client.WriteDatabase(ctx, c.dbId, dbw)
-	if err != nil {
-		log.Fatal(err)
-	}
 	return err
 }
 
 func (c *client) ListDB(ctx context.Context) ([]xv1.Database, error) {
 	dbs, ctx, err := c.Client.ListDatabases(ctx, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
 	return dbs, err
 
 }

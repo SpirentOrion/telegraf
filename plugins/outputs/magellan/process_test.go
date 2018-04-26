@@ -62,16 +62,15 @@ func TestProcessResultDef(t *testing.T) {
 		valid: true,
 	}
 	m := &Magellan{
-		Client: client,
+		Client:     client,
+		ResultDefs: make(map[string]*ResultDef),
 	}
-
-	r, err := m.createResultDef(tm[0])
-	require.NoError(t, err)
-	assert.NotEqual(t, r, nil)
 
 	ctx := context.Background()
 	client.reset()
-	err = m.writeResultDef(ctx, r)
+	err := m.process(ctx, tm)
 	require.NoError(t, err)
+	assert.Equal(t, len(m.ResultDefs), 1)
 	assert.Equal(t, len(client.params.rs), 1)
+	assert.Equal(t, len(client.params.dbw.ResultSets), 1)
 }

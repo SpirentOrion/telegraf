@@ -21,6 +21,12 @@
 			"revisionTime": "2016-10-17T23:00:55Z"
 		},
 		{
+			"checksumSHA1": "2H6tq+pJpaLCHF9BrqZYKS8dEmo=",
+			"path": "github.com/SpirentOrion/metrics-service/pkg/metrics/info",
+			"revision": "a52ef1553374f701fbd0c123532157da0fd3153e",
+			"revisionTime": "2018-04-16T22:44:15Z"
+		},
+		{
 			"checksumSHA1": "HBspoKk8CeHt9mzioSeolUeXLkc=",
 			"path": "github.com/SpirentOrion/orion-api/lib",
 			"revision": "8ee2a2cbdca3a62d00cf2b373e051884bdea7cfc",

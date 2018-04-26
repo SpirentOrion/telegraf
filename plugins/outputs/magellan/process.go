@@ -2,6 +2,7 @@ package magellan
 
 import (
 	"context"
+	"log"
 
 	xv1 "github.com/SpirentOrion/orion-api/res/xfer/v1"
 	"github.com/influxdata/telegraf"
@@ -9,41 +10,65 @@ import (
 
 const (
 	timestampName = "timestamp"
+	counterSuffix = "_cnt"
 )
 
 func (w *Magellan) process(ctx context.Context, metrics []telegraf.Metric) error {
 	dbw := &xv1.DatabaseWrite{
 		ResultSets: make([]xv1.ResultSetWrite, 0, len(metrics)),
 	}
-	for _, metric := range metrics {
+	var err error
+	updatedDefs := map[*ResultDef]bool{}
+	for m := range metrics {
+		metric := metrics[m]
 		defName := metric.Name()
+		t := metric.Type()
+		if t == telegraf.Counter {
+			// counters and gauges are seperate metrics, use separate resultdef to avoid timestamp merges
+			defName += counterSuffix
+		}
 		resultDef, ok := w.ResultDefs[defName]
 		if !ok {
-			resultDef, err := w.createResultDef(metric)
+			log.Printf("D! Creating result def %s", defName)
+			metricDef, _ := w.metricDef(defName)
+			resultDef = newResultDef(defName, metricDef)
 			w.ResultDefs[defName] = resultDef
-			err = w.writeResultDef(ctx, resultDef)
-			if err != nil {
-				continue
-			}
+			updatedDefs[resultDef] = true
 		}
 		if !resultDef.Enabled {
 			continue
 		}
-		rs := w.processMetric(metric)
-		if rs != nil {
+		if _, ok = updatedDefs[resultDef]; ok {
+			updateResultDef(resultDef, metric)
+		}
+		rs := w.processMetric(resultDef, metric)
+		if rs == nil {
 			continue
 		}
 		dbw.ResultSets = append(dbw.ResultSets, *rs)
 	}
+	if len(updatedDefs) > 0 {
+		dsList, rsList := w.processResultDefs(updatedDefs)
+		log.Printf("D! Writing %d result defs", len(updatedDefs))
+		err := w.Client.UpdateDB(ctx, dsList, rsList)
+		if err != nil {
+			enableResultDefs(updatedDefs, false)
+			log.Printf("D! result def dbwrite error %s", err.Error())
+			return err
+		}
+	}
 	if len(dbw.ResultSets) > 0 || len(dbw.DimensionSets) > 0 {
-		return w.Client.WriteDB(ctx, dbw)
+		if err = w.Client.WriteDB(ctx, dbw); err != nil {
+			log.Printf("D! result dbwrite error %s", err.Error())
+			return err
+		}
 	}
 	return nil
 }
 
-func (w *Magellan) processMetric(metric telegraf.Metric) *xv1.ResultSetWrite {
+func (w *Magellan) processMetric(r *ResultDef, metric telegraf.Metric) *xv1.ResultSetWrite {
 	rs := &xv1.ResultSetWrite{
-		Name: w.SetPrefix + metric.Name(),
+		Name: w.ResultPrefix + r.Name,
 	}
 	var values []interface{}
 
@@ -65,78 +90,36 @@ func (w *Magellan) processMetric(metric telegraf.Metric) *xv1.ResultSetWrite {
 	return rs
 }
 
-func (w *Magellan) createResultDef(metric telegraf.Metric) (*ResultDef, error) {
-	r := &ResultDef{
-		Name:    metric.Name(),
-		Enabled: true,
-	}
-
-	// create def from metric values
-	tags := metric.Tags()
-	fields := metric.Fields()
-	r.Def = &MetricsDef{
-		Dimensions: make([]string, 0, len(tags)),
-		Fields:     make([]Metric, 0, len(fields)),
-	}
-	for _, v := range tags {
-		r.Def.Dimensions = append(r.Def.Dimensions, v)
-	}
-	for n, v := range fields {
-		r.Def.Fields = append(r.Def.Fields,
-			Metric{
-				Name: n,
-				Type: valueType(v),
-			})
-	}
-	return r, nil
-}
-
-func (w *Magellan) writeResultDef(ctx context.Context, r *ResultDef) error {
-
-	rs := xv1.ResultSet{
-		Name: w.SetPrefix + r.Name,
-	}
-
+func (w *Magellan) processResultDefs(defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
 	var dsList []xv1.DimensionSet
-	var rsList []xv1.ResultSet
-
-	for _, v := range r.Def.Dimensions {
-		f := xv1.FieldDefinition{
-			Name:        v,
-			DisplayName: v,
-			Type:        "string",
+	rsList := make([]xv1.ResultSet, 0, len(defs))
+	for r := range defs {
+		rs := xv1.ResultSet{
+			Name: w.ResultPrefix + r.Name,
 		}
-		rs.Facts = append(rs.Facts, f)
-	}
-	for _, v := range r.Def.Fields {
-		f := xv1.FieldDefinition{
-			Name:        v.Name,
-			DisplayName: v.Name,
-			Type:        v.Type,
+		for _, v := range r.Def.Dimensions {
+			f := xv1.FieldDefinition{
+				Name:        v.Name,
+				DisplayName: v.Field,
+				Type:        "string",
+			}
+			rs.Facts = append(rs.Facts, f)
 		}
-		rs.Facts = append(rs.Facts, f)
+		for _, v := range r.Def.Fields {
+			f := xv1.FieldDefinition{
+				Name:        v.Name,
+				DisplayName: v.Field,
+				Type:        v.Type,
+			}
+			rs.Facts = append(rs.Facts, f)
+		}
+		rsList = append(rsList, rs)
 	}
-	rsList = append(rsList, rs)
-
-	var err error
-	if len(dsList) > 0 || len(rs.Facts) > 0 {
-		err = w.Client.UpdateDB(ctx, dsList, rsList)
-	}
-	r.Enabled = (err == nil)
-	return err
+	return dsList, rsList
 }
 
-func valueType(value interface{}) string {
-	var datatype string
-	switch value.(type) {
-	case int64:
-		datatype = "integer"
-	case float64:
-		datatype = "number"
-	case string:
-		datatype = "string"
-	default:
-		datatype = "string"
+func enableResultDefs(defs map[*ResultDef]bool, enable bool) {
+	for r := range defs {
+		r.Enabled = enable
 	}
-	return datatype
 }

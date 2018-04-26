@@ -2,7 +2,9 @@ package magellan
 
 import (
 	"context"
+	"log"
 
+	"github.com/SpirentOrion/metrics-service/pkg/metrics/info"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/outputs"
 	"github.com/influxdata/telegraf/plugins/outputs/magellan/client"
@@ -10,12 +12,14 @@ import (
 
 // Magellan output plugin
 type Magellan struct {
-	URL       string
-	DbName    string
-	SetPrefix string
+	URL          string `toml:"url"`
+	DbName       string `toml:"dbname"`
+	ResultPrefix string `toml:"result_prefix"`
+	MetricDefDir string `toml:"metric_def_dir"`
 
 	Client     client.Client
 	ResultDefs map[string]*ResultDef
+	MetricDefs map[string]*info.MetricDef
 }
 
 func (w *Magellan) Write(metrics []telegraf.Metric) error {
@@ -35,7 +39,10 @@ func (w *Magellan) Description() string {
 }
 
 func (w *Magellan) Connect() error {
+	log.Printf("D! Connect magellan %s, %s", w.URL, w.DbName)
 	w.ResultDefs = make(map[string]*ResultDef)
+	w.loadMetricDefs()
+
 	w.Client = client.New(w.URL, w.DbName)
 	ctx := context.Background()
 	found, err := w.Client.FindDB(ctx)
