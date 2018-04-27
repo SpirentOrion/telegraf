@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -225,6 +226,12 @@ func (h *HostAgent) subscribe() {
 	for {
 		msg, err := h.subscriber.RecvMessage(0)
 		if err != nil {
+			errno, ok := err.(syscall.Errno)
+			if ok && errno == syscall.EINTR {
+				log.Printf("I! host agent subscriber receive EINTR %s\n", err)
+				continue
+			}
+			log.Printf("E! host agent subscriber receive error %s\n", err)
 			break
 		} else {
 			h.msgs <- msg
