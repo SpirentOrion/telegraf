@@ -228,10 +228,10 @@ func (h *HostAgent) subscribe() {
 		if err != nil {
 			errno, ok := err.(syscall.Errno)
 			if ok && errno == syscall.EINTR {
-				log.Printf("I! host_agent subscriber.RecvMessage EINTR %s\n", err)
+				log.Printf("I! host agent subscriber receive EINTR %s\n", err)
 				continue
 			}
-			log.Printf("E! host_agent subscriber.RecvMessage error %s\n", err)
+			log.Printf("E! host agent subscriber receive error %s\n", err)
 			break
 		} else {
 			h.msgs <- msg
