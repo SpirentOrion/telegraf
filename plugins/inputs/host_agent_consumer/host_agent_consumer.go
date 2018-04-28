@@ -226,12 +226,12 @@ func (h *HostAgent) subscribe() {
 	for {
 		msg, err := h.subscriber.RecvMessage(0)
 		if err != nil {
-			errno, ok := err.(syscall.Errno)
-			if ok && errno == syscall.EINTR {
-				log.Printf("I! host agent subscriber receive EINTR %s\n", err)
+			errno := zmq.AsErrno(err)
+			if errno == zmq.Errno(syscall.EAGAIN) || errno == zmq.Errno(syscall.EINTR) {
+				log.Printf("I! host agent subscriber receive signal %s", err)
 				continue
 			}
-			log.Printf("E! host agent subscriber receive error %s\n", err)
+			log.Printf("I! host agent subscriber receive error %s", err)
 			break
 		} else {
 			h.msgs <- msg
