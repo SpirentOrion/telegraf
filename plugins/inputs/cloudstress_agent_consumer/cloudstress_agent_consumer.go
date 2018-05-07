@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -62,6 +63,7 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 	c.Lock()
 	defer c.Unlock()
 
+	var err error
 	c.acc = acc
 	//acc.SetPrecision(time.Second, 0)
 
@@ -71,17 +73,29 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 	c.deltaValues = make(map[string]map[string]uint64)
 	c.deltaRates = make(map[string]map[string]map[string]int64)
 
-	c.subscriber, _ = zmq.NewSocket(zmq.SUB)
-	c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
+	c.subscriber, err = zmq.NewSocket(zmq.SUB)
+	if err != nil {
+		log.Println("E! Unable to create subscriber socket:", err)
+		return err
+	}
+	err = c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
+	if err != nil {
+		log.Printf("E! Unable to bind to subscriber port tcp://*:%d: %s\n", c.SubscriberPort, err)
+		return err
+	}
 	//for _, agentIp := range c.AgentList {
 	//	c.subscriber.Connect("tcp://" + agentIp + ":" + strconv.Itoa(c.PublisherPort))
 	//}
-	c.subscriber.SetSubscribe("")
+	err = c.subscriber.SetSubscribe("")
+	if err != nil {
+		log.Println("E! Unable to subscribe on subscriber socket:", err)
+		return err
+	}
 
 	// Start the zmq message subscriber
 	go c.subscribe()
 
-	log.Printf("I! Started the cloudstress agent consumer service. Subscribing on *:%d\n", c.SubscriberPort)
+	log.Println("I! Started the cloudstress agent consumer service. Subscribing on *:", c.SubscriberPort)
 
 	return nil
 }
@@ -91,9 +105,9 @@ func (c *CloudStressAgent) Stop() {
 	defer c.Unlock()
 
 	close(c.done)
-	log.Printf("I! Stopping the cloudstress agent consumer service\n")
+	log.Println("I! Stopping the cloudstress agent consumer service")
 	if err := c.subscriber.Close(); err != nil {
-		log.Printf("E! Error closing cloudstress agent consumer service: %s\n", err.Error())
+		log.Println("E! Error closing cloudstress agent consumer service:", err)
 	}
 }
 
@@ -128,7 +142,7 @@ func (c *CloudStressAgent) Gather(acc telegraf.Accumulator) error {
 	if math.IsNaN(rate) {
 		rate = 0.0
 	}
-	log.Printf("D! Proccessed on average of %f agent metrics values per second", rate)
+	log.Printf("D! Proccessed on average of %f agent metrics values per second\n", rate)
 	return nil
 }
 
@@ -139,6 +153,12 @@ func (c *CloudStressAgent) subscribe() {
 	for {
 		msg, err := c.subscriber.RecvMessage(0)
 		if err != nil {
+			errno := zmq.AsErrno(err)
+			if errno == zmq.Errno(syscall.EAGAIN) || errno == zmq.Errno(syscall.EINTR) {
+				log.Println("I! cloudstress agent subscriber receive signal:", err)
+				continue
+			}
+			log.Println("E! cloudstress agent subscriber receive error:", err)
 			break
 		} else {
 			if !c.running {
@@ -159,7 +179,7 @@ func (c *CloudStressAgent) processMessages() {
 			updateMsg := &result.Update{}
 			err := proto.Unmarshal([]byte(msg[1]), updateMsg)
 			if err != nil {
-				log.Fatal("E! unmarshaling error: ", err)
+				log.Fatalln("E! unmarshaling error:", err)
 			}
 
 			tags := make(map[string]string)
@@ -208,7 +228,7 @@ func (c *CloudStressAgent) processMessages() {
 				c.currMetriscValue += int64(len(metrics))
 				c.totalMetricsValue += int64(len(metrics))
 			default:
-				log.Printf("E! Unknown Type\n")
+				log.Println("E! Unknown Type")
 			}
 		}
 	}
