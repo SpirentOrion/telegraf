@@ -3,6 +3,8 @@ package host_agent_consumer
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"math"
 	"os/exec"
@@ -239,6 +241,130 @@ func (h *HostAgent) subscribe() {
 	}
 }
 
+// parseMetricValues parses metric data sent from the metrics agent and puts it
+// into a map.
+func (h *HostAgent) parseMetricValues(mv []*metrics.MetricValue) (map[string]interface{}, error) {
+	values := make(map[string]interface{})
+	for _, v := range mv {
+		switch v.Value.(type) {
+		case *metrics.MetricValue_DoubleValue:
+			values[*v.Name] = v.GetDoubleValue()
+		case *metrics.MetricValue_Int64Value:
+			values[*v.Name] = v.GetInt64Value()
+		default:
+			errors.New("unexpected metric value type")
+		}
+	}
+	return values, nil
+}
+
+// parseMetricDimensions parses dimension (or tag) data sent from the metrics
+// agent and puts it into a map.  Additional dimensional data not available
+// from the metrics agent are created and derived off what was received.
+// For example, host IP and user-friendly instance names are added as additional
+// dimensions.
+func (h *HostAgent) parseMetricDimensions(measurement string, md []*metrics.MetricDimension) (map[string]string, error) {
+	dimensions := make(map[string]string)
+	for _, d := range md {
+		dimensions[*d.Name] = *d.Value
+	}
+	// set the Host IP address given the hostname
+	hostName := ""
+	if val, found := dimensions["hostname"]; found {
+		if len(val) > 0 {
+			hostName = val
+			hostIP := h.getHypervisorHostIP(hostName)
+			if hostIP != "" {
+				dimensions["host_ip"] = hostIP
+			} else {
+				// reload cloud hypervisors - looks like new hypervisor came online
+				h.loadCloudHypervisors()
+				hostIP = h.getHypervisorHostIP(hostName)
+				if hostIP == "" {
+					cloudHypervisor := CloudHypervisor{unknownIpAddr, hostName, ""}
+					h.cloudHypervisors[hostName] = cloudHypervisor
+					hostIP = cloudHypervisor.HostIP
+				}
+				dimensions["host_ip"] = hostIP
+			}
+		}
+	}
+	// set the Instance Name given the libvirt UUID
+	if hasSupportedMeasurement(measurement) {
+		if val, found := dimensions["libvirt_uuid"]; found {
+			if len(val) > 0 && val != unknownLibvirtUUID {
+				instName, err := h.instanceName(val)
+				if err != nil {
+					// load cloud instance for missing instance
+					cloudNames := h.getHypervisorCloudNames(hostName)
+					h.loadCloudInstance(val, cloudNames)
+					inst, ok := h.cloudInstance(val)
+					if ok {
+						instName = inst.Name
+					} else {
+						inst = &CloudInstance{val, unknownInstanceName}
+						h.setCloudInstance(val, inst)
+						instName = inst.Name
+					}
+				}
+				dimensions["instance_name"] = instName
+			}
+		}
+	}
+	// set the Network Name given the mac address
+	if macAddr, found := dimensions["mac_addr"]; found {
+		if len(hostName) > 0 {
+			networkPort, ok := h.cloudMacAddrNetwork(macAddr)
+			if ok {
+				dimensions["network_name"] = networkPort.NetworkName
+			} else {
+				// reload cloud network ports - looks like new network was instantiated
+				cloudNames := h.getHypervisorCloudNames(hostName)
+				networkPort := h.updateCloudNetworkPort(macAddr, cloudNames)
+				dimensions["network_name"] = networkPort.NetworkName
+			}
+		}
+	}
+	return dimensions, nil
+}
+
+// instanceName returns the user-friendly name of the instance matching the
+// given libvirt instance UUID.  Error is returned if the lookup fails.
+func (h *HostAgent) instanceName(id string) (string, error) {
+	inst, ok := h.cloudInstance(id)
+	if ok {
+		return inst.Name, nil
+	} else if id == ovsUUID {
+		inst = &CloudInstance{id, "ovs"}
+		h.setCloudInstance(id, inst)
+		return inst.Name, nil
+	} else if id == avsUUID {
+		inst = &CloudInstance{id, "avs"}
+		h.setCloudInstance(id, inst)
+		return inst.Name, nil
+	}
+	return "", fmt.Errorf("cannot find name for instance %s", id)
+}
+
+// processMetrics parses the real-time metric values and dimensions sent by the
+// metrics-agent and adds the data to the accumulator.
+func (h *HostAgent) processMetrics(m []*metrics.Metric) {
+	for _, metric := range m {
+		values, err := h.parseMetricValues(metric.GetValues())
+		if err != nil {
+			panic(err)
+		}
+		dimensions, err := h.parseMetricDimensions(*metric.Name, metric.GetDimensions())
+		if err != nil {
+			panic(err)
+		}
+		go h.acc.AddFields(*metric.Name, values, dimensions, time.Unix(0, *metric.Timestamp))
+		h.currValue++
+	}
+}
+
+// processMessages processes the real-time metrics from the metrics-agent that
+// were received on the ZMQ subscription socket.
 func (h *HostAgent) processMessages() {
 	for {
 		select {
@@ -251,104 +377,7 @@ func (h *HostAgent) processMessages() {
 				if err != nil {
 					log.Fatal("E! unmarshaling error: ", err)
 				}
-				metricsList := metricsMsg.GetMetrics()
-				for _, metric := range metricsList {
-					values := make(map[string]interface{})
-					for _, v := range metric.Values {
-						switch v.Value.(type) {
-						case *metrics.MetricValue_DoubleValue:
-							values[*v.Name] = v.GetDoubleValue()
-						case *metrics.MetricValue_Int64Value:
-							values[*v.Name] = v.GetInt64Value()
-						default:
-							panic("unreachable")
-						}
-					}
-					dimensions := make(map[string]string)
-					hostName := ""
-					for _, d := range metric.Dimensions {
-						dimensions[*d.Name] = *d.Value
-						if *d.Name == "hostname" && len(*d.Value) > 0 {
-							hostName = *d.Value
-							found := false
-							for k, v := range h.cloudHypervisors {
-								if strings.HasPrefix(strings.ToLower(k), strings.ToLower(*d.Value)) {
-									found = true
-									dimensions["host_ip"] = v.HostIP
-								}
-							}
-							if !found {
-								// reload cloud hypervisors - looks like new hypervisor came online
-								h.loadCloudHypervisors()
-								for k, v := range h.cloudHypervisors {
-									if strings.HasPrefix(k, *d.Value) {
-										found = true
-										dimensions["host_ip"] = v.HostIP
-									}
-								}
-								if !found {
-									cloudHypervisor := CloudHypervisor{unknownIpAddr, *d.Value, ""}
-									h.cloudHypervisors[*d.Value] = cloudHypervisor
-									dimensions["host_ip"] = cloudHypervisor.HostIP
-								}
-							}
-						}
-						if *metric.Name == "host_proc_metrics" ||
-							*metric.Name == "intel_pcm_core_metrics" ||
-							*metric.Name == "intel_rdt_core_metrics" ||
-							*metric.Name == "libvirt_domain_metrics" ||
-							*metric.Name == "libvirt_domain_core_metrics" ||
-							*metric.Name == "libvirt_domain_block_metrics" ||
-							*metric.Name == "libvirt_domain_interface_metrics" ||
-							*metric.Name == "vswitch_interface_metrics" ||
-							*metric.Name == "vswitch_dpdk_interface_metrics" ||
-							*metric.Name == "avs_vswitch_interface_metrics" ||
-							*metric.Name == "avs_vswitch_port_metrics" ||
-							*metric.Name == "avs_vswitch_port_queue_metrics" {
-							if *d.Name == "libvirt_uuid" && len(*d.Value) > 0 && *d.Value != unknownLibvirtUUID {
-								cloudInstance, ok := h.cloudInstance(*d.Value)
-								if ok {
-									dimensions["instance_name"] = cloudInstance.Name
-								} else if *d.Value == ovsUUID {
-									cloudInstance = &CloudInstance{*d.Value, "ovs"}
-									h.setCloudInstance(*d.Value, cloudInstance)
-									dimensions["instance_name"] = cloudInstance.Name
-								} else if *d.Value == avsUUID {
-									cloudInstance = &CloudInstance{*d.Value, "avs"}
-									h.setCloudInstance(*d.Value, cloudInstance)
-									dimensions["instance_name"] = cloudInstance.Name
-								} else {
-									// load cloud instance for missing instance
-									cloudNames := h.getHypervisorCloudNames(hostName)
-									h.loadCloudInstance(*d.Value, cloudNames)
-									cloudInstance, ok := h.cloudInstance(*d.Value)
-									if ok {
-										dimensions["instance_name"] = cloudInstance.Name
-									} else {
-										cloudInstance = &CloudInstance{*d.Value, unknownInstanceName}
-										h.setCloudInstance(*d.Value, cloudInstance)
-										dimensions["instance_name"] = cloudInstance.Name
-									}
-								}
-							}
-						}
-					}
-					if macAddr, ok := dimensions["mac_addr"]; ok {
-						if len(hostName) > 0 {
-							networkPort, ok := h.cloudMacAddrNetwork(macAddr)
-							if ok {
-								dimensions["network_name"] = networkPort.NetworkName
-							} else {
-								// reload cloud network ports - looks like new network was instantiated
-								cloudNames := h.getHypervisorCloudNames(hostName)
-								networkPort := h.updateCloudNetworkPort(macAddr, cloudNames)
-								dimensions["network_name"] = networkPort.NetworkName
-							}
-						}
-					}
-					go h.acc.AddFields(*metric.Name, values, dimensions, time.Unix(0, *metric.Timestamp))
-					h.currValue++
-				}
+				h.processMetrics(metricsMsg.GetMetrics())
 			}(msg)
 		}
 	}
@@ -618,6 +647,16 @@ func (h *HostAgent) getHypervisorCloudNames(hostName string) []string {
 	return cloudNames
 }
 
+// getHypervisorHostIP gets the IP address for the given hostname.
+func (h *HostAgent) getHypervisorHostIP(hostname string) string {
+	for k, v := range h.cloudHypervisors {
+		if strings.HasPrefix(strings.ToLower(k), strings.ToLower(hostname)) {
+			return v.HostIP
+		}
+	}
+	return ""
+}
+
 func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) *CloudNetworkPort {
 	currTime := time.Now()
 
@@ -690,6 +729,28 @@ func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error
 		a = append(a, "-addr", c.Addr)
 	}
 	return append(a, args...), nil
+}
+
+// hasSupportedMeasurement returns true if the given measurement is supported
+// by the host agent.
+func hasSupportedMeasurement(measurement string) bool {
+	switch measurement {
+	case "host_proc_metrics",
+		"intel_pcm_core_metrics",
+		"intel_rdt_core_metrics",
+		"libvirt_domain_metrics",
+		"libvirt_domain_core_metrics",
+		"libvirt_domain_block_metrics",
+		"libvirt_domain_interface_metrics",
+		"vswitch_interface_metrics",
+		"vswitch_dpdk_interface_metrics",
+		"avs_vswitch_interface_metrics",
+		"avs_vswitch_port_metrics",
+		"avs_vswitch_port_queue_metrics":
+		return true
+	default:
+		return false
+	}
 }
 
 func init() {
