@@ -290,25 +290,23 @@ func (h *HostAgent) parseMetricDimensions(measurement string, md []*metrics.Metr
 		}
 	}
 	// set the Instance Name given the libvirt UUID
-	if hasSupportedMeasurement(measurement) {
-		if val, found := dimensions["libvirt_uuid"]; found {
-			if len(val) > 0 && val != unknownLibvirtUUID {
-				instName, err := h.instanceName(val)
-				if err != nil {
-					// load cloud instance for missing instance
-					cloudNames := h.getHypervisorCloudNames(hostName)
-					h.loadCloudInstance(val, cloudNames)
-					inst, ok := h.cloudInstance(val)
-					if ok {
-						instName = inst.Name
-					} else {
-						inst = &CloudInstance{val, unknownInstanceName}
-						h.setCloudInstance(val, inst)
-						instName = inst.Name
-					}
+	if val, found := dimensions["libvirt_uuid"]; found {
+		if len(val) > 0 && val != unknownLibvirtUUID {
+			instName, err := h.instanceName(val)
+			if err != nil {
+				// load cloud instance for missing instance
+				cloudNames := h.getHypervisorCloudNames(hostName)
+				h.loadCloudInstance(val, cloudNames)
+				inst, ok := h.cloudInstance(val)
+				if ok {
+					instName = inst.Name
+				} else {
+					inst = &CloudInstance{val, unknownInstanceName}
+					h.setCloudInstance(val, inst)
+					instName = inst.Name
 				}
-				dimensions["instance_name"] = instName
 			}
+			dimensions["instance_name"] = instName
 		}
 	}
 	// set the Network Name given the mac address
@@ -729,28 +727,6 @@ func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error
 		a = append(a, "-addr", c.Addr)
 	}
 	return append(a, args...), nil
-}
-
-// hasSupportedMeasurement returns true if the given measurement is supported
-// by the host agent.
-func hasSupportedMeasurement(measurement string) bool {
-	switch measurement {
-	case "host_proc_metrics",
-		"intel_pcm_core_metrics",
-		"intel_rdt_core_metrics",
-		"libvirt_domain_metrics",
-		"libvirt_domain_core_metrics",
-		"libvirt_domain_block_metrics",
-		"libvirt_domain_interface_metrics",
-		"vswitch_interface_metrics",
-		"vswitch_dpdk_interface_metrics",
-		"avs_vswitch_interface_metrics",
-		"avs_vswitch_port_metrics",
-		"avs_vswitch_port_queue_metrics":
-		return true
-	default:
-		return false
-	}
 }
 
 func init() {

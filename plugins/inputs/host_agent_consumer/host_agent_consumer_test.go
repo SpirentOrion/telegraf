@@ -261,31 +261,6 @@ func createNetPortMap() CloudMacAddrNetworkMap {
 	return portMap
 }
 
-func TestHasSupportedMeasurement(t *testing.T) {
-	t.Parallel()
-
-	var v bool
-	// test valid cases
-	v = hasSupportedMeasurement("host_proc_metrics")
-	if !v {
-		t.Fatal("Expected to find host_proc_metrics")
-	}
-	v = hasSupportedMeasurement("avs_vswitch_port_queue_metrics")
-	if !v {
-		t.Fatal("Expected to find avs_vswitch_port_queue_metrics")
-	}
-	// test case-sensitivity
-	v = hasSupportedMeasurement("Host_Proc_Metrics")
-	if v {
-		t.Fatal("Expected not to find Host_Proc_Metrics (case-sensitive)")
-	}
-	// test invalid measurement
-	v = hasSupportedMeasurement("bogus_metrics")
-	if v {
-		t.Fatal("Expected not to find bogus_metrics")
-	}
-}
-
 func TestParseMetricValues(t *testing.T) {
 	t.Parallel()
 
@@ -509,22 +484,4 @@ func BenchmarkMetricsVswitchDpdkIfc(b *testing.B) {
 }
 func BenchmarkMetricsVswitchIfc(b *testing.B) {
 	benchmarkProcessMetrics("vswitch_interface_metrics", vswitchIfcCount, vswitchIfcRatio, b)
-}
-
-func benchmarkHasSupportedMeasurement(measurement string, b *testing.B) {
-	var valid bool
-	for n := 0; n < b.N; n++ {
-		valid = hasSupportedMeasurement(measurement)
-	}
-	if !valid {
-		b.Fatalf("expected measurement %s to be supported", measurement)
-	}
-}
-
-func BenchmarkHasSupportedMeasurementHostProcMetrics(b *testing.B) {
-	benchmarkHasSupportedMeasurement("host_proc_metrics", b)
-}
-
-func BenchmarkHasSupportedMeasurementAvsVswitchPortQueueMetrics(b *testing.B) {
-	benchmarkHasSupportedMeasurement("avs_vswitch_port_queue_metrics", b)
 }
