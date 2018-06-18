@@ -78,6 +78,11 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 		log.Println("E! Unable to create subscriber socket:", err)
 		return err
 	}
+	err = c.subscriber.SetIpv6(true)
+	if err != nil {
+		log.Println("E! Unable to set IPv6 on subscriber socket:", err)
+		return err
+	}
 	err = c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
 	if err != nil {
 		log.Printf("E! Unable to bind to subscriber port tcp://*:%d: %s\n", c.SubscriberPort, err)
@@ -176,6 +181,10 @@ func (c *CloudStressAgent) processMessages() {
 		case <-c.done:
 			return
 		case msg := <-c.msgs:
+			if len(msg) < 2 {
+				log.Println("E! cloudstress agent message length too short")
+				continue
+			}
 			updateMsg := &result.Update{}
 			err := proto.Unmarshal([]byte(msg[1]), updateMsg)
 			if err != nil {
