@@ -78,6 +78,11 @@ func (c *CloudStressAgent) Start(acc telegraf.Accumulator) error {
 		log.Println("E! Unable to create subscriber socket:", err)
 		return err
 	}
+	err = c.subscriber.SetIpv6(true)
+	if err != nil {
+		log.Println("E! Unable to set IPv6 on subscriber socket:", err)
+		return err
+	}
 	err = c.subscriber.Bind("tcp://*:" + strconv.Itoa(c.SubscriberPort))
 	if err != nil {
 		log.Printf("E! Unable to bind to subscriber port tcp://*:%d: %s\n", c.SubscriberPort, err)
