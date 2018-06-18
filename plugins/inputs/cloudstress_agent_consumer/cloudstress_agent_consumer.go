@@ -176,6 +176,10 @@ func (c *CloudStressAgent) processMessages() {
 		case <-c.done:
 			return
 		case msg := <-c.msgs:
+			if len(msg) < 2 {
+				log.Println("E! cloudstress agent message length too short")
+				continue
+			}
 			updateMsg := &result.Update{}
 			err := proto.Unmarshal([]byte(msg[1]), updateMsg)
 			if err != nil {
