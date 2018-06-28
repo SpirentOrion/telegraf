@@ -48,15 +48,17 @@ type HostAgent struct {
 }
 
 type CloudProvider struct {
-	Name     string
-	AuthUrl  string
-	User     string
-	Password string
-	Tenant   string
-	Region   string
-	Provider string
-	Addr     string
-	isValid  bool
+	Name         string
+	AuthUrl      string
+	User         string
+	Password     string
+	Tenant       string
+	Region       string
+	TenantDomain string
+	UserDomain   string
+	Provider     string
+	Addr         string
+	isValid      bool
 }
 
 type CloudHypervisors struct {
@@ -382,44 +384,19 @@ func (h *HostAgent) processMessages() {
 }
 
 func (h *HostAgent) loadCloudHypervisors() {
-	glimpsePath := h.glimpsePath()
-	for i, c := range h.CloudProviders {
+	for i := range h.CloudProviders {
+		c := &h.CloudProviders[i]
 		if c.isValid {
-			a, err := h.glimpseArgs(c, "list", "hypervisors")
+			output, err := h.runGlimpse(c, "list", "hypervisors")
 			if err != nil {
-				log.Printf("E! Error getting glimpse cloud %s hypervisors: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-			cmd := exec.Command(glimpsePath, a...)
-
-			cmdReader, err := cmd.StdoutPipe()
-			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list hypervisors for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-			// read the data from stdout
-			buf := bufio.NewReader(cmdReader)
-
-			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list hypervisors for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-
-			output, _ := buf.ReadString('\n')
-			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list hypervisors for cloud %s: %s - %s", c.Name, err.Error(), output)
+				log.Printf("E! %s", err)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			var hypervisors CloudHypervisors
 			json.Unmarshal([]byte(output), &hypervisors)
-
 			log.Printf("I! Loading cloud hypervisor names from cloud: %s", c.Name)
-
 			for _, hypervisor := range hypervisors.Hypervisors {
 				hypervisor.CloudName = c.Name
 				h.cloudHypervisors[hypervisor.HostName] = hypervisor
@@ -429,42 +406,18 @@ func (h *HostAgent) loadCloudHypervisors() {
 }
 
 func (h *HostAgent) loadCloudInstances() {
-	glimpsePath := h.glimpsePath()
-	for i, c := range h.CloudProviders {
+	for i := range h.CloudProviders {
+		c := &h.CloudProviders[i]
 		if c.isValid {
-			a, err := h.glimpseArgs(c, "list", "instances")
+			output, err := h.runGlimpse(c, "list", "instances")
 			if err != nil {
-				log.Printf("E! Error getting glimpse cloud %s instances: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-			cmd := exec.Command(glimpsePath, a...)
-
-			cmdReader, err := cmd.StdoutPipe()
-			if err != nil {
-				log.Printf("E! Error creating StdoutPipe for glimpse to list instances for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-			// read the data from stdout
-			buf := bufio.NewReader(cmdReader)
-
-			if err = cmd.Start(); err != nil {
-				log.Printf("E! Error starting glimpse to list instances for cloud %s: %s", c.Name, err.Error())
-				h.CloudProviders[i].isValid = false
-				continue
-			}
-
-			output, _ := buf.ReadString('\n')
-			if err = cmd.Wait(); err != nil {
-				log.Printf("E! Error returned from glimpse to list instances for cloud %s: %s - %s", c.Name, err.Error(), output)
+				log.Printf("E! %s", err)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
 
 			var instances CloudInstances
 			json.Unmarshal([]byte(output), &instances)
-
 			log.Printf("I! Loading cloud instance names from cloud %s, count %d", c.Name, len(instances.Instances))
 			for ci := range instances.Instances {
 				instance := &instances.Instances[ci]
@@ -481,8 +434,8 @@ func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 		return
 	}
 
-	glimpsePath := h.glimpsePath()
-	for i, c := range h.CloudProviders {
+	for i := range h.CloudProviders {
+		c := &h.CloudProviders[i]
 		if !c.isValid {
 			continue
 		}
@@ -499,39 +452,15 @@ func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 			}
 		}
 
-		a, err := h.glimpseArgs(c, "list", "instances", "-id", instanceId)
+		output, err := h.runGlimpse(c, "list", "instances", "-id", instanceId)
 		if err != nil {
-			log.Printf("E! Error getting glimpse cloud %s instances: %s", c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-		cmd := exec.Command(glimpsePath, a...)
-
-		cmdReader, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("E! Error creating StdoutPipe for glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-		// read the data from stdout
-		buf := bufio.NewReader(cmdReader)
-
-		if err = cmd.Start(); err != nil {
-			log.Printf("E! Error starting glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-
-		output, _ := buf.ReadString('\n')
-		if err = cmd.Wait(); err != nil {
-			log.Printf("E! Error returned from glimpse to list instance %s for cloud %s: %s", instanceId, c.Name, err.Error())
+			log.Printf("E! %s", err)
 			h.CloudProviders[i].isValid = false
 			continue
 		}
 
 		var instances CloudInstances
 		json.Unmarshal([]byte(output), &instances)
-
 		for ci := range instances.Instances {
 			instance := &instances.Instances[ci]
 			log.Printf("I! Adding new cloud instance name from cloud %s for instance id %s - instance name = %s", c.Name, instanceId, instance.Name)
@@ -541,8 +470,8 @@ func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 }
 
 func (h *HostAgent) updateCloudNetworkPorts(netPortMap CloudMacAddrNetworkMap, cloudNames []string) {
-	glimpsePath := h.glimpsePath()
-	for i, c := range h.CloudProviders {
+	for i := range h.CloudProviders {
+		c := &h.CloudProviders[i]
 		if !c.isValid {
 			continue
 		}
@@ -558,39 +487,16 @@ func (h *HostAgent) updateCloudNetworkPorts(netPortMap CloudMacAddrNetworkMap, c
 				continue
 			}
 		}
-		a, err := h.glimpseArgs(c, "list", "network-ports")
+
+		output, err := h.runGlimpse(c, "list", "network-ports")
 		if err != nil {
-			log.Printf("E! Error getting glimpse cloud %s network-ports: %s", c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-		cmd := exec.Command(glimpsePath, a...)
-
-		cmdReader, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("E! Error creating StdoutPipe for glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-		// read the data from stdout
-		buf := bufio.NewReader(cmdReader)
-
-		if err = cmd.Start(); err != nil {
-			log.Printf("E! Error starting glimpse to list network-ports for cloud %s: %s", c.Name, err.Error())
-			h.CloudProviders[i].isValid = false
-			continue
-		}
-
-		output, _ := buf.ReadString('\n')
-		if err = cmd.Wait(); err != nil {
-			log.Printf("E! Error returned from glimpse to list network-ports for %s: %s - %s", c.Name, err.Error(), output)
+			log.Printf("E! %s", err)
 			h.CloudProviders[i].isValid = false
 			continue
 		}
 
 		var networkPorts CloudNetworkPorts
 		json.Unmarshal([]byte(output), &networkPorts)
-
 		log.Printf("I! Loading cloud network names from cloud %s", c.Name)
 		for ni := range networkPorts.NetworkPorts {
 			networkPort := &networkPorts.NetworkPorts[ni]
@@ -700,11 +606,34 @@ func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) 
 	return networkPort
 }
 
-func (h HostAgent) glimpsePath() string {
+func (h *HostAgent) runGlimpse(c *CloudProvider, args ...string) (string, error) {
+	cmdArgs, err := h.glimpseArgs(c, args...)
+	if err != nil {
+		return "", fmt.Errorf("Error cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err)
+	}
+	cmd := exec.Command(h.glimpsePath(), cmdArgs...)
+	cmdReader, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("Error getting StdoutPipe cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err)
+	}
+	// read the data from stdout
+	buf := bufio.NewReader(cmdReader)
+	err = cmd.Start()
+	if err != nil {
+		return "", fmt.Errorf("Error starting cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err)
+	}
+	output, _ := buf.ReadString('\n')
+	if err = cmd.Wait(); err != nil {
+		return "", fmt.Errorf("Error returned for cloud %s glimpse %s: %s, %s", c.Name, strings.Join(args, " "), err, output)
+	}
+	return output, nil
+}
+
+func (h *HostAgent) glimpsePath() string {
 	return "./glimpse"
 }
 
-func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error) {
+func (h *HostAgent) glimpseArgs(c *CloudProvider, args ...string) ([]string, error) {
 	a := []string{
 		"-provider", c.Provider,
 	}
@@ -722,6 +651,12 @@ func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error
 	}
 	if c.Region != "" {
 		a = append(a, "-region", c.Region)
+	}
+	if c.TenantDomain != "" {
+		a = append(a, "-tenant-domain", c.TenantDomain)
+	}
+	if c.UserDomain != "" {
+		a = append(a, "-user-domain", c.UserDomain)
 	}
 	if c.Addr != "" {
 		a = append(a, "-addr", c.Addr)
