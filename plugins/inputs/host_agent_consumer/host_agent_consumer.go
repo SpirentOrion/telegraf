@@ -624,7 +624,7 @@ func (h *HostAgent) runGlimpse(c *CloudProvider, args ...string) (string, error)
 	}
 	output, _ := buf.ReadString('\n')
 	if err = cmd.Wait(); err != nil {
-		return "", fmt.Errorf("Error returned for cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err)
+		return "", fmt.Errorf("Error returned for cloud %s glimpse %s: %s, %s", c.Name, strings.Join(args, " "), err, output)
 	}
 	return output, nil
 }
