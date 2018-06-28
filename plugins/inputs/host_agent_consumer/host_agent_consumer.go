@@ -389,7 +389,7 @@ func (h *HostAgent) loadCloudHypervisors() {
 		if c.isValid {
 			output, err := h.runGlimpse(c, "list", "hypervisors")
 			if err != nil {
-				log.Printf("E! %s", err.Error())
+				log.Printf("E! %s", err)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -411,7 +411,7 @@ func (h *HostAgent) loadCloudInstances() {
 		if c.isValid {
 			output, err := h.runGlimpse(c, "list", "instances")
 			if err != nil {
-				log.Printf("E! %s", err.Error())
+				log.Printf("E! %s", err)
 				h.CloudProviders[i].isValid = false
 				continue
 			}
@@ -454,7 +454,7 @@ func (h *HostAgent) loadCloudInstance(instanceId string, cloudNames []string) {
 
 		output, err := h.runGlimpse(c, "list", "instances", "-id", instanceId)
 		if err != nil {
-			log.Printf("E! %s", err.Error())
+			log.Printf("E! %s", err)
 			h.CloudProviders[i].isValid = false
 			continue
 		}
@@ -490,7 +490,7 @@ func (h *HostAgent) updateCloudNetworkPorts(netPortMap CloudMacAddrNetworkMap, c
 
 		output, err := h.runGlimpse(c, "list", "network-ports")
 		if err != nil {
-			log.Printf("E! %s", err.Error())
+			log.Printf("E! %s", err)
 			h.CloudProviders[i].isValid = false
 			continue
 		}
@@ -609,22 +609,22 @@ func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) 
 func (h *HostAgent) runGlimpse(c *CloudProvider, args ...string) (string, error) {
 	cmdArgs, err := h.glimpseArgs(c, args...)
 	if err != nil {
-		return "", fmt.Errorf("Error cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err.Error())
+		return "", fmt.Errorf("Error cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err)
 	}
 	cmd := exec.Command(h.glimpsePath(), cmdArgs...)
 	cmdReader, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", fmt.Errorf("Error getting StdoutPipe cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err.Error())
+		return "", fmt.Errorf("Error getting StdoutPipe cloud %s for glimpse %s: %s", c.Name, strings.Join(args, " "), err)
 	}
 	// read the data from stdout
 	buf := bufio.NewReader(cmdReader)
 	err = cmd.Start()
 	if err != nil {
-		return "", fmt.Errorf("Error starting cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err.Error())
+		return "", fmt.Errorf("Error starting cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err)
 	}
 	output, _ := buf.ReadString('\n')
 	if err = cmd.Wait(); err != nil {
-		return "", fmt.Errorf("Error returned for cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err.Error())
+		return "", fmt.Errorf("Error returned for cloud %s glimpse %s: %s", c.Name, strings.Join(args, " "), err)
 	}
 	return output, nil
 }
