@@ -36,7 +36,7 @@ package:
 # Get dependencies and use gdm to checkout changesets
 prepare:
 	go get github.com/sparrc/gdm
-	gdm restore
+	gdm vendor
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
