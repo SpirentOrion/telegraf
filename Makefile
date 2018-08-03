@@ -17,7 +17,7 @@ windows: prepare-windows build-windows
 build:
 	cd proto && make
 	go install -ldflags \
-		"-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.branch=$(BRANCH)" ./...
+		"-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.branch=$(BRANCH)" ./cmd/...
 
 build-windows:
 	GOOS=windows GOARCH=amd64 go build -o telegraf.exe -ldflags \
@@ -36,7 +36,7 @@ package:
 # Get dependencies and use gdm to checkout changesets
 prepare:
 	go get github.com/sparrc/gdm
-	gdm restore
+	gdm vendor
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
