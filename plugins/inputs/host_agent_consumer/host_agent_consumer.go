@@ -58,6 +58,7 @@ type CloudProvider struct {
 	UserDomain   string
 	Provider     string
 	Addr         string
+	Insecure     *bool
 	isValid      bool
 }
 
@@ -660,6 +661,9 @@ func (h *HostAgent) glimpseArgs(c *CloudProvider, args ...string) ([]string, err
 	}
 	if c.Addr != "" {
 		a = append(a, "-addr", c.Addr)
+	}
+	if c.Insecure != nil && *c.Insecure {
+		a = append(a, "-insecure")
 	}
 	return append(a, args...), nil
 }
