@@ -209,7 +209,7 @@ func (c *CloudStressAgent) processMessages() {
 
 			switch updateMsg.GetType() {
 			case result.Update_CPU:
-				metrics := c.processCPUMessage(loadType, updateMsg)
+				metrics := c.processCPUMessage(loadType, timestamp, updateMsg)
 				go c.acc.AddFields(loadType, metrics, tags, time.Unix(timestamp, 0))
 				c.currMsgsValue++
 				c.totalMsgsValue++
@@ -243,7 +243,7 @@ func (c *CloudStressAgent) processMessages() {
 	}
 }
 
-func (c *CloudStressAgent) processCPUMessage(loadType string, msg *result.Update) map[string]interface{} {
+func (c *CloudStressAgent) processCPUMessage(loadType string, currTime int64, msg *result.Update) map[string]interface{} {
 	metrics := make(map[string]interface{})
 	srcKey := loadType + msg.GetUuid()
 
@@ -269,6 +269,11 @@ func (c *CloudStressAgent) processCPUMessage(loadType string, msg *result.Update
 	metric = "steal"
 	metric_delta = c.delta(srcKey, metric, msg.GetCpu().GetSteal())
 	metrics[metric] = float64(metric_delta) / float64(utmost_delta) * 100
+
+	metric = "work"
+	work_rate, work := c.iocount(currTime, srcKey, metric, msg.GetCpu().GetWork())
+	metrics[metric+"_rate"] = work_rate
+	metrics[metric] = work
 
 	actual, _ := metrics["actual"].(float64)
 	target, _ := metrics["target"].(float64)

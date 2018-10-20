@@ -9,6 +9,7 @@ message CpuLoad {
   uint64 system = 4;
   uint64 user   = 5;
   uint64 steal  = 6;
+  uint64 work   = 7;
 }
 
 message IOStats {
