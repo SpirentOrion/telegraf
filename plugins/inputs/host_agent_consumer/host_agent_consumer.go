@@ -615,11 +615,11 @@ func (h *HostAgent) updateCloudNetworkPort(macAddr string, cloudNames []string) 
 	return networkPort
 }
 
-func (h HostAgent) glimpsePath() string {
+func (h *HostAgent) glimpsePath() string {
 	return "./glimpse"
 }
 
-func (h HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error) {
+func (h *HostAgent) glimpseArgs(c CloudProvider, args ...string) ([]string, error) {
 	a := []string{
 		"-provider", c.Provider,
 	}

@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"log"
 	"net/url"
 
 	cv1 "github.com/SpirentOrion/orion-api/res/client/v1"
@@ -12,88 +11,82 @@ import (
 
 // Client magellan output interface
 type Client interface {
-	CreateDB(ctx context.Context) error
 	UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.ResultSet) error
 	WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error
-	ValidDB() bool
-	ListDB(ctx context.Context) ([]xv1.Database, error)
-	FindDB(ctx context.Context) (bool, error)
 }
 
 type client struct {
 	Client *cv1.Client
+	DbId   string
 	DbName string
-	dbId   string
 }
 
-// NewClient creates a new client struct
-func New(baseUrl string, dbName string) Client {
+func NewOrionResClient(baseUrl string) *cv1.Client {
 	u, _ := url.Parse(baseUrl)
-	return &client{
-		Client: cv1.New(u),
-		DbName: dbName,
-	}
+	return cv1.New(u)
 }
 
-func (c *client) CreateDB(ctx context.Context) error {
+func CreateDB(ctx context.Context, c *cv1.Client, dbName string) (string, error) {
 	db := &xv1.Database{
-		Name:          c.DbName,
-		Description:   c.DbName,
+		Name:          dbName,
+		Description:   dbName,
 		Datastore:     datastore(),
 		DimensionSets: []xv1.DimensionSet{},
 		ResultSets: []xv1.ResultSet{
 			agentCollectorResultSetDef(),
 		},
 	}
-	db, ctx, err := c.Client.CreateDatabase(ctx, db)
+	newDb, ctx, err := c.CreateDatabase(ctx, db)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	c.dbId = db.Id
-	return err
+	return newDb.Id, nil
+}
+
+func ListDB(ctx context.Context, c *cv1.Client) ([]xv1.Database, error) {
+	dbs, ctx, err := c.ListDatabases(ctx, nil)
+	return dbs, err
+
+}
+
+func FindDbId(ctx context.Context, c *cv1.Client, dbId string) (*xv1.Database, error) {
+	dbs, err := ListDB(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	for _, db := range dbs {
+		if db.Id == dbId {
+			return &db, nil
+		}
+	}
+	return nil, nil
+}
+
+// NewClient creates a new client struct
+func New(c *cv1.Client, dbId string, dbName string) Client {
+	return &client{
+		Client: c,
+		DbId:   dbId,
+		DbName: dbName,
+	}
 }
 
 func (c *client) UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.ResultSet) error {
 	db := &xv1.Database{
 		Name:          c.DbName,
-		Description:   c.DbName,
-		Id:            c.dbId,
+		Id:            c.DbId,
 		Datastore:     datastore(),
 		DimensionSets: ds,
 		ResultSets:    rs,
 	}
 
-	db, ctx, err := c.Client.UpdateDatabase(ctx, c.dbId, db)
+	db, ctx, err := c.Client.UpdateDatabase(ctx, c.DbId, db)
 	return err
 }
 
 func (c *client) WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error {
-	ctx, err := c.Client.WriteDatabase(ctx, c.dbId, dbw)
+	ctx, err := c.Client.WriteDatabase(ctx, c.DbId, dbw)
 	return err
-}
-
-func (c *client) ListDB(ctx context.Context) ([]xv1.Database, error) {
-	dbs, ctx, err := c.Client.ListDatabases(ctx, nil)
-	return dbs, err
-
-}
-
-func (c *client) ValidDB() bool {
-	return (c.dbId != "")
-}
-
-func (c *client) FindDB(ctx context.Context) (bool, error) {
-	dbs, err := c.ListDB(ctx)
-	if err != nil {
-		return false, err
-	}
-	for _, db := range dbs {
-		if db.Name == c.DbName {
-			c.dbId = db.Id
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func datastore() xv1.DatabaseDatastore {

@@ -2,6 +2,7 @@ package magellan
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/SpirentOrion/metrics-service/pkg/metrics/info"
@@ -12,48 +13,43 @@ import (
 
 // Magellan output plugin
 type Magellan struct {
-	URL          string `toml:"url"`
-	DbName       string `toml:"dbname"`
-	ResultPrefix string `toml:"result_prefix"`
-	MetricDefDir string `toml:"metric_def_dir"`
+	URL           string `toml:"url"`
+	DbId          string `toml:"db_id"`
+	DbName        string `toml:"db_name"`
+	TestKey       string `toml:"test_key"`
+	ResultPrefix  string `toml:"result_prefix"`
+	MetricsDefDir string `toml:"metrics_dir"`
 
 	Client     client.Client
 	ResultDefs map[string]*ResultDef
-	MetricDefs map[string]*info.MetricDef
+	SetDefs    info.SetDefs
+	DimStores  map[string]*DimStore
 }
 
-func (w *Magellan) Write(metrics []telegraf.Metric) error {
-	if !w.Client.ValidDB() {
+func (m *Magellan) Write(metrics []telegraf.Metric) error {
+	if m.Client == nil {
 		return nil
 	}
 	ctx := context.Background()
-	return w.process(ctx, metrics)
+	return m.process(ctx, metrics)
 }
 
-func (w *Magellan) SampleConfig() string {
+func (m *Magellan) SampleConfig() string {
 	return sampleConfig
 }
 
-func (w *Magellan) Description() string {
+func (m *Magellan) Description() string {
 	return "Configuration for magellan output"
 }
 
-func (w *Magellan) Connect() error {
-	log.Printf("D! Connect magellan %s, %s", w.URL, w.DbName)
-	w.ResultDefs = make(map[string]*ResultDef)
-	w.loadMetricDefs()
-
-	w.Client = client.New(w.URL, w.DbName)
-	ctx := context.Background()
-	found, err := w.Client.FindDB(ctx)
+func (m *Magellan) Connect() error {
+	var err error
+	m.ResultDefs = make(map[string]*ResultDef)
+	m.loadMetricDefs()
+	m.Client, err = createClient(m.URL, m.DbId, m.DbName)
 	if err != nil {
+		log.Printf("E! Magellan client error: %s", err)
 		return err
-	}
-	if !found {
-		err = w.Client.CreateDB(ctx)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -71,4 +67,53 @@ func init() {
 	outputs.Add("magellan", func() telegraf.Output {
 		return &Magellan{}
 	})
+}
+
+func createClient(url string, dbId string, dbName string) (client.Client, error) {
+	log.Printf("I! Creating connection to magellan %s:", url)
+	c := client.NewOrionResClient(url)
+	ctx := context.Background()
+	var err error
+	if len(dbId) == 0 && len(dbName) > 0 {
+		log.Printf("I! Creating database with name %s", dbName)
+		dbId, err = client.CreateDB(ctx, c, dbName)
+		if err != nil {
+			return nil, err
+		}
+	}
+	log.Printf("I! Using database DbId=%s", dbId)
+	db, err := client.FindDbId(ctx, c, dbId)
+	if err != nil {
+		return nil, err
+	}
+	if db == nil {
+		return nil, fmt.Errorf("Failed to find DbId=%s", dbId)
+	}
+	return client.New(c, db.Id, db.Name), nil
+}
+
+func (m *Magellan) loadMetricDefs() error {
+	log.Printf("I: load metrics definition directory: %s", m.MetricsDefDir)
+	if m.MetricsDefDir == "" {
+		return nil
+	}
+	err := m.SetDefs.ScanFiles(m.MetricsDefDir, nil)
+	if err != nil {
+		log.Printf("E! ScanFiles error: %s", err)
+	}
+	log.Printf("I! Dimension sets loaded %d", len(m.SetDefs.Dim))
+	log.Printf("I! Result sets loaded %d", len(m.SetDefs.Res))
+	return err
+}
+
+func (m *Magellan) dimStore(dimName string) *DimStore {
+	if m.DimStores == nil {
+		m.DimStores = make(map[string]*DimStore)
+	}
+	if s, ok := m.DimStores[dimName]; ok {
+		return s
+	}
+	s := NewDimStore()
+	m.DimStores[dimName] = s
+	return s
 }

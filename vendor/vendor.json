@@ -29,14 +29,14 @@
 		{
 			"checksumSHA1": "HBspoKk8CeHt9mzioSeolUeXLkc=",
 			"path": "github.com/SpirentOrion/orion-api/lib",
-			"revision": "8ee2a2cbdca3a62d00cf2b373e051884bdea7cfc",
+			"revision": "cd4aed7a056dc7c6f749df7f1380cf220fa566de",
 			"revisionTime": "2018-04-03T18:27:36Z",
 			"tree": true
 		},
 		{
 			"checksumSHA1": "LFN6tW9hpQ7lcrufJ7ITrZxD/pA=",
 			"path": "github.com/SpirentOrion/orion-api/res/lib/schema",
-			"revision": "8ee2a2cbdca3a62d00cf2b373e051884bdea7cfc",
+			"revision": "cd4aed7a056dc7c6f749df7f1380cf220fa566de",
 			"revisionTime": "2018-04-03T18:27:36Z",
 			"tree": true
 		},
