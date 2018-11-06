@@ -32,7 +32,7 @@ func (m *Magellan) process(ctx context.Context, metrics []telegraf.Metric) error
 		resultDef, ok := m.ResultDefs[defName]
 		if !ok {
 			log.Printf("D! Creating result def %s", defName)
-			resultDef = newResultDef(defName, &m.SetDefs)
+			resultDef = newResultDef(defName, &m.MetricDefs)
 			m.ResultDefs[defName] = resultDef
 			updatedDefs[resultDef] = true
 		}

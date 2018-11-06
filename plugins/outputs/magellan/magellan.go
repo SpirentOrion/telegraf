@@ -22,7 +22,7 @@ type Magellan struct {
 
 	Client     client.Client
 	ResultDefs map[string]*ResultDef
-	SetDefs    info.SetDefs
+	MetricDefs info.MetricDefs
 	DimStores  map[string]*DimStore
 }
 
@@ -97,12 +97,12 @@ func (m *Magellan) loadMetricDefs() error {
 	if m.MetricsDefDir == "" {
 		return nil
 	}
-	err := m.SetDefs.ScanFiles(m.MetricsDefDir, nil)
+	err := m.MetricDefs.ScanFiles(m.MetricsDefDir, nil)
 	if err != nil {
 		log.Printf("E! ScanFiles error: %s", err)
 	}
-	log.Printf("I! Dimension sets loaded %d", len(m.SetDefs.Dim))
-	log.Printf("I! Result sets loaded %d", len(m.SetDefs.Res))
+	log.Printf("I! Dimension sets loaded %d", len(m.MetricDefs.Dim))
+	log.Printf("I! Result sets loaded %d", len(m.MetricDefs.Res))
 	return err
 }
 

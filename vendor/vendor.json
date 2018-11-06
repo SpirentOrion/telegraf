@@ -21,23 +21,23 @@
 			"revisionTime": "2016-10-17T23:00:55Z"
 		},
 		{
-			"checksumSHA1": "2H6tq+pJpaLCHF9BrqZYKS8dEmo=",
+			"checksumSHA1": "xmJvwsLBbrAqsIEDjyFHeqKjnH4=",
 			"path": "github.com/SpirentOrion/metrics-service/pkg/metrics/info",
-			"revision": "a52ef1553374f701fbd0c123532157da0fd3153e",
-			"revisionTime": "2018-04-16T22:44:15Z"
+			"revision": "0622f715a5985f5b0290854a43d1b803600d9c72",
+			"revisionTime": "2018-11-06T19:49:01Z"
 		},
 		{
-			"checksumSHA1": "HBspoKk8CeHt9mzioSeolUeXLkc=",
+			"checksumSHA1": "Tvf3yrRihi6Nw23Azd5JypnX7XY=",
 			"path": "github.com/SpirentOrion/orion-api/lib",
-			"revision": "cd4aed7a056dc7c6f749df7f1380cf220fa566de",
-			"revisionTime": "2018-04-03T18:27:36Z",
+			"revision": "d4d7c462e2748c5ffc848002cfc65761ea20b23a",
+			"revisionTime": "2018-11-06T18:34:53Z",
 			"tree": true
 		},
 		{
-			"checksumSHA1": "LFN6tW9hpQ7lcrufJ7ITrZxD/pA=",
+			"checksumSHA1": "Np9hRqb8pR1cz94/iqogI61XGMc=",
 			"path": "github.com/SpirentOrion/orion-api/res/lib/schema",
-			"revision": "cd4aed7a056dc7c6f749df7f1380cf220fa566de",
-			"revisionTime": "2018-04-03T18:27:36Z",
+			"revision": "d4d7c462e2748c5ffc848002cfc65761ea20b23a",
+			"revisionTime": "2018-11-06T18:34:53Z",
 			"tree": true
 		},
 		{
@@ -71,9 +71,10 @@
 			"tree": true
 		},
 		{
-			"checksumSHA1": "SPQcWDUN+wcTThipcR9EzX4t3E8=",
+			"checksumSHA1": "2nTxrtvUecg8v33ZkjIFiUxfUI8=",
 			"path": "github.com/cenkalti/backoff",
-			"revision": "b02f2bbce11d7ea6b97f282ef1771b0fe2f65ef3",
+			"revision": "62661b46c4093e2c1f38d943e663db1a29873e80",
+			"revisionTime": "2018-10-03T08:08:54Z",
 			"tree": true
 		},
 		{
@@ -311,10 +312,10 @@
 			"tree": true
 		},
 		{
-			"checksumSHA1": "asKDMHmA34wkDxXY18ch/jjLcEM=",
+			"checksumSHA1": "vxIJqurwt9soLA6q8cThJzFu+lM=",
 			"path": "github.com/pmylund/go-cache",
-			"revision": "a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0",
-			"revisionTime": "2017-07-22T04:01:10Z"
+			"revision": "5633e0862627c011927fa39556acae8b1f1df58a",
+			"revisionTime": "2018-08-15T05:31:27Z"
 		},
 		{
 			"checksumSHA1": "WELKLdhRo3cMeFjMjnPQTxKJ/t4=",
@@ -407,10 +408,10 @@
 			"revisionTime": "2018-01-27T04:06:03Z"
 		},
 		{
-			"checksumSHA1": "I1ZKWcukrLK/+qxZdzBjbowmz1c=",
+			"checksumSHA1": "/jyBaglClAeAQTY6iRkvPArQEjs=",
 			"path": "github.com/xeipuuv/gojsonschema",
-			"revision": "8bcffc811467a5f691810420385be6e66b35a317",
-			"revisionTime": "2018-02-07T21:43:16Z"
+			"revision": "f3a9dae5b19473510a3062802a98815f609ed747",
+			"revisionTime": "2018-10-16T01:29:52Z"
 		},
 		{
 			"checksumSHA1": "KUwHChhkF1HXqezgTmVRByZW/Qk=",

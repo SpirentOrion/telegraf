@@ -21,7 +21,7 @@ type ResultDef struct {
 	ResFacts   map[string]*info.ResSetFact
 }
 
-func newResultDef(defName string, setDefs *info.SetDefs) *ResultDef {
+func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 	resFacts := make(map[string]*info.ResSetFact)
 	dimAttribs := make(map[string]string)
 

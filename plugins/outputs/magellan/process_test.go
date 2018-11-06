@@ -71,9 +71,9 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	}
 	err := m.loadMetricDefs()
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(m.SetDefs.Dim))
-	assert.Equal(t, 1, len(m.SetDefs.Res))
-	dim, ok := m.SetDefs.Dim["mock_agent"]
+	assert.Equal(t, 1, len(m.MetricDefs.Dim))
+	assert.Equal(t, 1, len(m.MetricDefs.Res))
+	dim, ok := m.MetricDefs.Dim["mock_agent"]
 	assert.Equal(t, true, ok)
 	assert.Equal(t, "mock_agent", dim.Name)
 
