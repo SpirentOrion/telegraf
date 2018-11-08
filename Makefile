@@ -33,10 +33,26 @@ build-for-docker:
 package:
 	./scripts/build.py --package --version="$(VERSION)" --platform=linux --arch=all --upload
 
-# Get dependencies and use gdm to checkout changesets
+# Migrate to govendor to support package level dependencies
+# govendor vendor.json should be checked in. Only use this target to rerun migration from Godep if telegraf rebased
+migrate-govendor:
+	rm -rf ./vendor
+	#git checkout Godeps
+	govendor migrate gdm
+	#git checkout Godeps
+	cd spirent && make migrate
+
+# Get dependencies and use govendor to checkout changesets
+prepare-govendor:
+	govendor sync
+	cd spirent && make prepare
+
+# Get dependencies
 prepare:
 	go get github.com/sparrc/gdm
 	gdm vendor
+	rm -rf ./vendor/github.com/SpirentOrion/luddite/vendor/github.com/SpirentOrion/logrus
+	cd spirent && make prepare
 
 # Use the windows godeps file to prepare dependencies
 prepare-windows:
