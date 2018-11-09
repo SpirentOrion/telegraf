@@ -127,7 +127,7 @@ func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegra
 			s.Rows = append(s.Rows, dim_values)
 			ds = append(ds, s)
 		}
-		// add dimensioin keys to result set
+		// add dimension keys to result set
 		rs.Columns = append(rs.Columns, dimName)
 		values = append(values, dimObj.Key)
 	}

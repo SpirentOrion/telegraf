@@ -62,7 +62,7 @@ func FindDbId(ctx context.Context, c *cv1.Client, dbId string) (*xv1.Database, e
 }
 
 // NewClient creates a new client struct
-func New(c *cv1.Client, dbId string, dbName string) Client {
+func New(c *cv1.Client, dbId, dbName string) Client {
 	return &client{
 		Client: c,
 		DbId:   dbId,
