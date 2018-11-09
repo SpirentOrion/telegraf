@@ -6,10 +6,11 @@ import (
 	"sync"
 
 	"github.com/SpirentOrion/metrics-service/pkg/metrics/info"
-	"github.com/influxdata/telegraf/plugins/outputs/magellan/client"
+	"github.com/influxdata/telegraf/plugins/outputs/orionres/client"
 )
 
-type TestClient struct {
+// Client session definition used to write into an orion results database
+type SessionClient struct {
 	Client  client.Client
 	TestKey string
 	DbId    string
@@ -21,7 +22,7 @@ type Processor struct {
 	MetricDefs info.MetricDefs
 	ResultDefs map[string]*ResultDef
 	DimStores  map[string]*DimStore
-	client     *TestClient
+	client     *SessionClient
 }
 
 func New() *Processor {
@@ -31,7 +32,7 @@ func New() *Processor {
 	}
 }
 
-func NewClient(url string, dbId string, dbName string, testKey string) (*TestClient, error) {
+func NewClient(url, dbId, dbName, testKey string) (*SessionClient, error) {
 	c := client.NewOrionResClient(url)
 	ctx := context.Background()
 	var err error
@@ -48,7 +49,7 @@ func NewClient(url string, dbId string, dbName string, testKey string) (*TestCli
 	if db == nil {
 		return nil, fmt.Errorf("Failed to find DbId=%s", dbId)
 	}
-	return &TestClient{
+	return &SessionClient{
 		Client:  client.New(c, db.Id, db.Name),
 		TestKey: testKey,
 		DbId:    db.Id,
@@ -56,6 +57,8 @@ func NewClient(url string, dbId string, dbName string, testKey string) (*TestCli
 }
 
 func (p *Processor) dimStore(dimName string) *DimStore {
+	p.Lock()
+	defer p.Unlock()
 	if s, ok := p.DimStores[dimName]; ok {
 		return s
 	}
@@ -64,13 +67,13 @@ func (p *Processor) dimStore(dimName string) *DimStore {
 	return s
 }
 
-func (p *Processor) SetClient(c *TestClient) {
+func (p *Processor) SetClient(c *SessionClient) {
 	p.Lock()
 	defer p.Unlock()
 	p.client = c
 }
 
-func (p *Processor) Client() *TestClient {
+func (p *Processor) Client() *SessionClient {
 	p.Lock()
 	defer p.Unlock()
 	return p.client

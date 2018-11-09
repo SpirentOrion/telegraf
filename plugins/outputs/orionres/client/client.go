@@ -9,7 +9,7 @@ import (
 	// "github.com/SpirentOrion/orion-client/go/client"
 )
 
-// Client magellan output interface
+// Client orionres output interface
 type Client interface {
 	UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.ResultSet) error
 	WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error
@@ -44,9 +44,8 @@ func CreateDB(ctx context.Context, c *cv1.Client, dbName string) (string, error)
 }
 
 func ListDB(ctx context.Context, c *cv1.Client) ([]xv1.Database, error) {
-	dbs, ctx, err := c.ListDatabases(ctx, nil)
+	dbs, _, err := c.ListDatabases(ctx, nil)
 	return dbs, err
-
 }
 
 func FindDbId(ctx context.Context, c *cv1.Client, dbId string) (*xv1.Database, error) {
@@ -79,13 +78,12 @@ func (c *client) UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.R
 		DimensionSets: ds,
 		ResultSets:    rs,
 	}
-
-	db, ctx, err := c.Client.UpdateDatabase(ctx, c.DbId, db)
+	db, _, err := c.Client.UpdateDatabase(ctx, c.DbId, db)
 	return err
 }
 
 func (c *client) WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error {
-	ctx, err := c.Client.WriteDatabase(ctx, c.DbId, dbw)
+	_, err := c.Client.WriteDatabase(ctx, c.DbId, dbw)
 	return err
 }
 

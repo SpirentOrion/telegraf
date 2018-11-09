@@ -50,8 +50,8 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 		if rs != nil {
 			dbw.ResultSets = append(dbw.ResultSets, *rs)
 		}
-		for i := range ds {
-			dbw.DimensionSets = append(dbw.DimensionSets, *ds[i])
+		for j := range ds {
+			dbw.DimensionSets = append(dbw.DimensionSets, *ds[j])
 		}
 	}
 	if len(updatedDefs) > 0 {
@@ -72,7 +72,7 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	return nil
 }
 
-func (p *Processor) processMetric(c *TestClient, r *ResultDef, metric telegraf.Metric) ([]*xv1.DimensionSetWrite, *xv1.ResultSetWrite) {
+func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegraf.Metric) ([]*xv1.DimensionSetWrite, *xv1.ResultSetWrite) {
 	var ds []*xv1.DimensionSetWrite
 	rs := &xv1.ResultSetWrite{
 		Name: r.Name,
@@ -143,7 +143,7 @@ func (p *Processor) processMetric(c *TestClient, r *ResultDef, metric telegraf.M
 	return ds, rs
 }
 
-func (p *Processor) processResultDefs(c *TestClient, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
+func (p *Processor) processResultDefs(c *SessionClient, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
 	var dsList []xv1.DimensionSet
 	rsList := make([]xv1.ResultSet, 0, len(defs))
 	dimNames := make(map[string]bool)

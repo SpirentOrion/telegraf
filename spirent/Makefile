@@ -16,5 +16,4 @@ prepare:
 
 # Setup govendor dependencies 
 migrate:
-	cd .. && \
-	./spirent/govendor.sh
+	./govendor.sh

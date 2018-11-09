@@ -1,4 +1,4 @@
-package magellan
+package orionres
 
 import (
 	"context"
@@ -6,12 +6,12 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/outputs"
-	"github.com/influxdata/telegraf/plugins/outputs/magellan/processor"
-	"github.com/influxdata/telegraf/plugins/outputs/magellan/res/session"
+	"github.com/influxdata/telegraf/plugins/outputs/orionres/processor"
+	"github.com/influxdata/telegraf/plugins/outputs/orionres/res/session"
 	"github.com/influxdata/telegraf/spirent/service"
 )
 
-type Magellan struct {
+type OrionRes struct {
 	MetricsDefDir string `toml:"metrics_dir"`
 	URL           string `toml:"url"`
 	DbId          string `toml:"db_id"`
@@ -21,7 +21,7 @@ type Magellan struct {
 	Processor *processor.Processor
 }
 
-func (m *Magellan) Write(metrics []telegraf.Metric) error {
+func (m *OrionRes) Write(metrics []telegraf.Metric) error {
 	if m.Processor == nil {
 		return nil
 	}
@@ -29,20 +29,20 @@ func (m *Magellan) Write(metrics []telegraf.Metric) error {
 	return m.Processor.Process(ctx, metrics)
 }
 
-func (m *Magellan) SampleConfig() string {
+func (m *OrionRes) SampleConfig() string {
 	return sampleConfig
 }
 
-func (m *Magellan) Description() string {
-	return "Configuration for magellan output"
+func (m *OrionRes) Description() string {
+	return "Configuration for orionres output"
 }
 
-func (m *Magellan) Connect() error {
+func (m *OrionRes) Connect() error {
 	m.loadMetricDefs()
 	if len(m.DbId) > 0 || len(m.DbName) > 0 {
 		c, err := processor.NewClient(m.URL, m.DbId, m.DbName, m.TestKey)
 		if err != nil {
-			log.Printf("E! Magellan client error: %s", err)
+			log.Printf("E! orionres client error: %s", err)
 			return err
 		}
 		m.Processor.SetClient(c)
@@ -52,26 +52,26 @@ func (m *Magellan) Connect() error {
 	return nil
 }
 
-func (w *Magellan) Close() error {
+func (w *OrionRes) Close() error {
 	return nil
 }
 
 var sampleConfig = `
-  ## magellan URL
+  ## orionres URL
   url = "http://localhost:9002"
 `
 
 func init() {
-	m := &Magellan{
+	m := &OrionRes{
 		Processor: processor.New(),
 	}
 	m.initResources()
-	outputs.Add("magellan", func() telegraf.Output {
+	outputs.Add("orionres", func() telegraf.Output {
 		return m
 	})
 }
 
-func (m *Magellan) loadMetricDefs() error {
+func (m *OrionRes) loadMetricDefs() error {
 	log.Printf("I: load metrics definition directory: %s", m.MetricsDefDir)
 	if m.MetricsDefDir == "" {
 		return nil
@@ -85,7 +85,7 @@ func (m *Magellan) loadMetricDefs() error {
 	return err
 }
 
-func (m *Magellan) initResources() {
+func (m *OrionRes) initResources() {
 	s := service.Service()
-	s.Service.AddCollectionResource("/telegraf/output/magellan/sessions", session.NewResource(m.Processor))
+	s.Service.AddCollectionResource("/telegraf/output/orionres/sessions", session.NewResource(m.Processor))
 }

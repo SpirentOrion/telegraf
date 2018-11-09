@@ -38,11 +38,11 @@ func (c *mockClient) WriteDB(ctx context.Context, dbw *xv1.DatabaseWrite) error 
 	return nil
 }
 
-func newMockClient() *TestClient {
+func newMockClient() *SessionClient {
 	mockClient := &mockClient{
 		valid: true,
 	}
-	return &TestClient{
+	return &SessionClient{
 		Client: mockClient,
 	}
 }
@@ -51,12 +51,12 @@ func TestProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
-	m.Client = newMockClient()
-	client := m.Client.Client.(*mockClient)
+	m.SetClient(newMockClient())
+	client := m.Client().Client.(*mockClient)
 
 	ctx := context.Background()
 	client.reset()
-	err := m.process(ctx, tm)
+	err := m.Process(ctx, tm)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(m.ResultDefs))
 	assert.Equal(t, 1, len(client.params.rs))
@@ -67,8 +67,8 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
-	m.Client = newMockClient()
-	client := m.Client.Client.(*mockClient)
+	m.SetClient(newMockClient())
+	client := m.Client().Client.(*mockClient)
 
 	err := m.MetricDefs.ScanFiles("./testdata/results", nil)
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestSetDefProcessResultDef(t *testing.T) {
 
 	ctx := context.Background()
 	client.reset()
-	err = m.process(ctx, tm)
+	err = m.Process(ctx, tm)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(m.ResultDefs))
 	r, ok := m.ResultDefs["test1"]

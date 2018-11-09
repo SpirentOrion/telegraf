@@ -6,7 +6,7 @@ import (
 
 	"github.com/SpirentOrion/logrus"
 	"github.com/SpirentOrion/luddite"
-	"github.com/influxdata/telegraf/plugins/outputs/magellan/processor"
+	"github.com/influxdata/telegraf/plugins/outputs/orionres/processor"
 )
 
 const (
@@ -14,7 +14,7 @@ const (
 )
 
 var errorDefs = map[string]string{
-	EcodeClientConnect: "Error creating magellan connection: %s",
+	EcodeClientConnect: "Error creating orionres connection: %s",
 }
 
 type Session struct {
