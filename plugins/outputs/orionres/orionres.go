@@ -72,10 +72,10 @@ func init() {
 }
 
 func (m *OrionRes) loadMetricDefs() error {
-	log.Printf("I: load metrics definition directory: %s", m.MetricsDefDir)
 	if m.MetricsDefDir == "" {
 		return nil
 	}
+	log.Printf("I: load metrics definition directory: %s", m.MetricsDefDir)
 	err := m.Processor.MetricDefs.ScanFiles(m.MetricsDefDir, nil)
 	if err != nil {
 		log.Printf("E! ScanFiles error: %s", err)
