@@ -24,7 +24,7 @@ type Session struct {
 	TestKey string   `json:"test_key,omitempty" xml:"test_key,omitempty"`
 }
 
-func newSession(c *processor.TestClient) *Session {
+func newSession(c *processor.SessionClient) *Session {
 	return &Session{
 		DbId:    c.DbId,
 		Url:     c.Url,

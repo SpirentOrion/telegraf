@@ -52,7 +52,7 @@ func (m *OrionRes) Connect() error {
 	return nil
 }
 
-func (w *OrionRes) Close() error {
+func (m *OrionRes) Close() error {
 	return nil
 }
 
