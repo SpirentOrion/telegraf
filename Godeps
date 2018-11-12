@@ -65,3 +65,10 @@ gopkg.in/dancannon/gorethink.v1 edc7a6a68e2d8015f5ffe1b2560eed989f8a45be
 gopkg.in/fatih/pool.v2 6e328e67893eb46323ad06f0e92cb9536babbabc
 gopkg.in/mgo.v2 3f83fa5005286a7fe593b055f0d7771a7dce4655
 gopkg.in/yaml.v2 4c78c975fe7c825c6d1466c42be594d1d6f3aba6
+github.com/SpirentOrion/metrics-service/pkg/metrics/info 0622f715a5985f5b0290854a43d1b803600d9c72
+github.com/SpirentOrion/go-querystring/query 42aadd77e0a344548f04ee169862516a1a6feeac
+github.com/SpirentOrion/orion-api/lib d4d7c462e2748c5ffc848002cfc65761ea20b23a
+github.com/SpirentOrion/orion-api/res/lib/schema d4d7c462e2748c5ffc848002cfc65761ea20b23a
+github.com/SpirentOrion/orion-client f2c856afe23d725c867d3d976e92efa952adde94
+github.com/SpirentOrion/logrus bca7f7d35e352ee0a21c4fa0b08d846c237f6220
+github.com/SpirentOrion/luddite c11d1db697e07f6428467d9fcf10e2b43e53dda2

@@ -1,0 +1,18 @@
+result_set:
+  name: test1
+  description: test1 mock agent results 
+  bll:
+    group: 
+    plugin:
+  dimension_sets:
+  - mock_agent 
+  primary_dimension_set: mock_agent 
+  facts:
+  - name: value 
+    description: Value 
+    db:
+      base_unit: none
+      data_type: number
+    ms_db:
+      name: value 
+      data_type: float

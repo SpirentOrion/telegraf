@@ -1,0 +1,16 @@
+dimension_set:
+  name: mock_agent
+  description: Attributes of a mock agent
+  bll:
+    plugin: 
+    group: 
+    group_display_name:
+  metrics_service:
+    identifiers:
+    - tag1
+  attributes:
+  - name: tag1
+    display_name: Tag1 
+    description: Tag1 
+    base_unit: none
+    data_type: string
