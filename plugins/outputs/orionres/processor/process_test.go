@@ -43,7 +43,8 @@ func newMockClient() *SessionClient {
 		valid: true,
 	}
 	return &SessionClient{
-		Client: mockClient,
+		Client:     mockClient,
+		ResultDefs: make(map[string]*ResultDef),
 	}
 }
 
@@ -58,7 +59,7 @@ func TestProcessResultDef(t *testing.T) {
 	client.reset()
 	err := m.Process(ctx, tm)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(m.ResultDefs))
+	assert.Equal(t, 1, len(m.Client().ResultDefs))
 	assert.Equal(t, 1, len(client.params.rs))
 	assert.Equal(t, 1, len(client.params.dbw.ResultSets))
 }
@@ -82,8 +83,8 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	client.reset()
 	err = m.Process(ctx, tm)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(m.ResultDefs))
-	r, ok := m.ResultDefs["test1"]
+	assert.Equal(t, 1, len(m.Client().ResultDefs))
+	r, ok := m.Client().ResultDefs["test1"]
 	assert.Equal(t, true, ok)
 	assert.Equal(t, 1, len(r.Dims))
 

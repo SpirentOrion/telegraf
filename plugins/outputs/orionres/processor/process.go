@@ -33,11 +33,11 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 		//      counters and gauges are seperate metrics, use separate resultdef to avoid timestamp merges
 		//	defName += counterSuffix
 		//  }
-		resultDef, ok := p.ResultDefs[defName]
+		resultDef, ok := c.ResultDefs[defName]
 		if !ok {
 			log.Printf("D! Creating result def %s", defName)
 			resultDef = newResultDef(defName, &p.MetricDefs)
-			p.ResultDefs[defName] = resultDef
+			c.ResultDefs[defName] = resultDef
 			updatedDefs[resultDef] = true
 		}
 		if !resultDef.Enabled {
@@ -56,6 +56,7 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	}
 	if len(updatedDefs) > 0 {
 		dsList, rsList := p.processResultDefs(c, updatedDefs)
+		log.Printf("D! updating %d dim & %d res sets", len(dsList), len(rsList))
 		err := c.Client.UpdateDB(ctx, dsList, rsList)
 		if err != nil {
 			log.Printf("E! result def dbwrite error %s", err.Error())

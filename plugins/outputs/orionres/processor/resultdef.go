@@ -50,7 +50,8 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 		idNames := dim.MetricsService.Identifiers
 		if len(idNames) == 0 {
 			idNames = append(idNames, dim.Attributes[0].Name)
-			log.Printf("I! identifiers not specified for %s dimension, default to 1st attribute %s", d, idNames[0])
+			log.Printf("I! identifiers not specified for %s dimension, dimension won't be filled in from metrics data", d)
+			continue
 		}
 		var attribNames []string
 		for _, a := range dim.Attributes {

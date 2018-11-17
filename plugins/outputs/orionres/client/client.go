@@ -49,16 +49,8 @@ func ListDB(ctx context.Context, c *cv1.Client) ([]xv1.Database, error) {
 }
 
 func FindDbId(ctx context.Context, c *cv1.Client, dbId string) (*xv1.Database, error) {
-	dbs, err := ListDB(ctx, c)
-	if err != nil {
-		return nil, err
-	}
-	for _, db := range dbs {
-		if db.Id == dbId {
-			return &db, nil
-		}
-	}
-	return nil, nil
+	db, _, err := c.GetDatabase(ctx, dbId, nil)
+	return db, err
 }
 
 // NewClient creates a new client struct
@@ -71,14 +63,21 @@ func New(c *cv1.Client, dbId, dbName string) Client {
 }
 
 func (c *client) UpdateDB(ctx context.Context, ds []xv1.DimensionSet, rs []xv1.ResultSet) error {
+	// Hack for now to use the current metadata
+	odb, err := FindDbId(ctx, c.Client, c.DbId)
+	if err != nil {
+		return err
+	}
+
 	db := &xv1.Database{
 		Name:          c.DbName,
 		Id:            c.DbId,
 		Datastore:     datastore(),
 		DimensionSets: ds,
 		ResultSets:    rs,
+		Metadata:      odb.Metadata,
 	}
-	db, _, err := c.Client.UpdateDatabase(ctx, c.DbId, db)
+	db, _, err = c.Client.UpdateDatabase(ctx, c.DbId, db)
 	return err
 }
 
