@@ -1,9 +1,5 @@
 package processor
 
-import (
-	"sync"
-)
-
 type DimObj struct {
 	Key        int
 	Id         string
@@ -11,7 +7,6 @@ type DimObj struct {
 }
 
 type DimStore struct {
-	sync.RWMutex
 	Dims    map[string]*DimObj
 	nextKey int
 }
@@ -23,8 +18,6 @@ func NewDimStore() *DimStore {
 }
 
 func (d *DimStore) Find(id string) *DimObj {
-	d.RLock()
-	defer d.RUnlock()
 	if obj, ok := d.Dims[id]; ok {
 		return obj
 	}
@@ -37,8 +30,6 @@ func (d *DimStore) Create(id string, attributes map[string]interface{}) *DimObj 
 		Id:         id,
 		Attributes: attributes,
 	}
-	d.Lock()
-	defer d.Unlock()
 	d.Dims[id] = obj
 	d.nextKey++
 	return obj

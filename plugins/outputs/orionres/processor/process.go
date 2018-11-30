@@ -92,7 +92,7 @@ func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegra
 			continue
 		}
 		dimName := dim.Dim.Name
-		dimStore := p.dimStore(dimName)
+		dimStore := c.dimStore(dimName)
 		idKey := strings.Join(idList, ":")
 		dimObj := dimStore.Find(idKey)
 		var objUpdated bool
@@ -184,6 +184,7 @@ func (p *Processor) processResultDefs(c *SessionClient, defs map[*ResultDef]bool
 				Name:        v.Name,
 				DisplayName: v.DisplayName,
 				Type:        v.Db.DataType,
+				Unit:        v.Db.BaseUnit,
 			}
 			rs.Facts = append(rs.Facts, f)
 		}
