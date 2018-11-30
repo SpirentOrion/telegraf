@@ -45,6 +45,7 @@ func newMockClient() *SessionClient {
 	return &SessionClient{
 		Client:     mockClient,
 		ResultDefs: make(map[string]*ResultDef),
+		DimStores:  make(map[string]*DimStore),
 	}
 }
 

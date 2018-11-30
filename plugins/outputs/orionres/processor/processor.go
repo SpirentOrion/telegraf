@@ -16,19 +16,17 @@ type SessionClient struct {
 	DbId       string
 	Url        string
 	ResultDefs map[string]*ResultDef
+	DimStores  map[string]*DimStore
 }
 
 type Processor struct {
 	sync.RWMutex
 	MetricDefs info.MetricDefs
-	DimStores  map[string]*DimStore
 	client     *SessionClient
 }
 
 func New() *Processor {
-	return &Processor{
-		DimStores: make(map[string]*DimStore),
-	}
+	return &Processor{}
 }
 
 func NewClient(url, dbId, dbName, testKey string) (*SessionClient, error) {
@@ -53,18 +51,8 @@ func NewClient(url, dbId, dbName, testKey string) (*SessionClient, error) {
 		TestKey:    testKey,
 		DbId:       db.Id,
 		ResultDefs: make(map[string]*ResultDef),
+		DimStores:  make(map[string]*DimStore),
 	}, nil
-}
-
-func (p *Processor) dimStore(dimName string) *DimStore {
-	p.Lock()
-	defer p.Unlock()
-	if s, ok := p.DimStores[dimName]; ok {
-		return s
-	}
-	s := NewDimStore()
-	p.DimStores[dimName] = s
-	return s
 }
 
 func (p *Processor) SetClient(c *SessionClient) {
@@ -77,4 +65,13 @@ func (p *Processor) Client() *SessionClient {
 	p.Lock()
 	defer p.Unlock()
 	return p.client
+}
+
+func (c *SessionClient) dimStore(dimName string) *DimStore {
+	if s, ok := c.DimStores[dimName]; ok {
+		return s
+	}
+	s := NewDimStore()
+	c.DimStores[dimName] = s
+	return s
 }
