@@ -53,6 +53,7 @@ func TestProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
+	m.AddNewMetrics = true
 	m.SetClient(newMockClient())
 	client := m.Client().Client.(*mockClient)
 
@@ -69,6 +70,7 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
+	m.AddNewMetrics = true
 	m.SetClient(newMockClient())
 	client := m.Client().Client.(*mockClient)
 

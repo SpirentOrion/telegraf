@@ -13,6 +13,7 @@ import (
 
 type OrionRes struct {
 	MetricsDefDir string `toml:"metrics_dir"`
+	AddNewMetrics bool   `toml:"add_new_metrics"`
 	URL           string `toml:"url"`
 	DbId          string `toml:"db_id"`
 	DbName        string `toml:"db_name"`
