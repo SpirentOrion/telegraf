@@ -14,24 +14,27 @@ type ResultDefDim struct {
 }
 
 type ResultDef struct {
-	Name       string
-	Enabled    bool
-	Dims       []*ResultDefDim
-	DimAttribs map[string]string
-	ResFacts   map[string]*info.ResSetFact
+	Name              string
+	MetricServiceName string
+	Enabled           bool
+	RemapResFacts     bool
+	Dims              []*ResultDefDim
+	DimAttribs        map[string]string
+	ResFacts          map[string]*info.ResSetFact
 }
 
 func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 	resFacts := make(map[string]*info.ResSetFact)
 	dimAttribs := make(map[string]string)
 
-	res, ok := setDefs.Res[defName]
+	res, ok := setDefs.MetricsServiceRes[defName]
 	if !ok {
 		return &ResultDef{
-			Name:       defName,
-			Enabled:    true,
-			DimAttribs: dimAttribs,
-			ResFacts:   resFacts,
+			Name:              defName,
+			MetricServiceName: defName,
+			Enabled:           true,
+			DimAttribs:        dimAttribs,
+			ResFacts:          resFacts,
 		}
 	}
 
@@ -50,7 +53,7 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 		idNames := dim.MetricsService.Identifiers
 		if len(idNames) == 0 {
 			idNames = append(idNames, dim.Attributes[0].Name)
-			log.Printf("I! identifiers not specified for %s dimension, dimension won't be filled in from metrics data", d)
+			log.Printf("D! identifiers not specified for %s dimension, dimension won't be filled in from metrics data", d)
 			continue
 		}
 		var attribNames []string
@@ -80,16 +83,21 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 		resFacts[f.Name] = f
 	}
 	return &ResultDef{
-		Name:       defName,
-		Dims:       dimSets,
-		DimAttribs: dimAttribs,
-		ResFacts:   resFacts,
-		Enabled:    true,
+		Name:              res.Name,
+		MetricServiceName: res.MetricsServiceName(),
+		Dims:              dimSets,
+		DimAttribs:        dimAttribs,
+		RemapResFacts:     res.MetricsService.RemapFacts,
+		ResFacts:          resFacts,
+		Enabled:           true,
 	}
 }
 
 func updateResultDef(r *ResultDef, metric telegraf.Metric) (bool, error) {
 	updated := false
+	if r.RemapResFacts {
+		return updated, nil
+	}
 
 	tags := metric.Tags()
 	for n := range tags {

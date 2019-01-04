@@ -21,8 +21,9 @@ type SessionClient struct {
 
 type Processor struct {
 	sync.RWMutex
-	MetricDefs info.MetricDefs
-	client     *SessionClient
+	MetricDefs    info.MetricDefs
+	AddNewMetrics bool
+	client        *SessionClient
 }
 
 func New() *Processor {

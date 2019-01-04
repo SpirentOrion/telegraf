@@ -53,6 +53,7 @@ func TestProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
+	m.AddNewMetrics = true
 	m.SetClient(newMockClient())
 	client := m.Client().Client.(*mockClient)
 
@@ -69,6 +70,7 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	tm := testutil.MockMetrics()
 
 	m := New()
+	m.AddNewMetrics = true
 	m.SetClient(newMockClient())
 	client := m.Client().Client.(*mockClient)
 
@@ -94,4 +96,30 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	assert.Equal(t, 1, len(client.params.dbw.ResultSets[0].Rows))
 	assert.Equal(t, 3, len(client.params.dbw.ResultSets[0].Rows[0]))
 
+}
+
+func BenchmarkProcessResultDef(b *testing.B) {
+	tm := testutil.MockMetrics()
+
+	m := New()
+	m.AddNewMetrics = true
+	m.SetClient(newMockClient())
+	client := m.Client().Client.(*mockClient)
+
+	err := m.MetricDefs.ScanFiles("./testdata/results", nil)
+	require.NoError(b, err)
+	assert.Equal(b, 1, len(m.MetricDefs.Dim))
+	assert.Equal(b, 1, len(m.MetricDefs.Res))
+	dim, ok := m.MetricDefs.Dim["mock_agent"]
+	assert.Equal(b, true, ok)
+	assert.Equal(b, "mock_agent", dim.Name)
+
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		err = m.Process(ctx, tm)
+		require.NoError(b, err)
+		client.reset()
+	}
 }

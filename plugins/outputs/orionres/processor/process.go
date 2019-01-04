@@ -15,6 +15,10 @@ const (
 	// counterSuffix = "_cnt"
 )
 
+var (
+	dbSafetyLevelCommitted string = "committed"
+)
+
 func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) error {
 	c := p.Client()
 	if c == nil {
@@ -22,37 +26,14 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	}
 	dbw := &xv1.DatabaseWrite{
 		ResultSets: make([]xv1.ResultSetWrite, 0, len(metrics)),
+		Options: xv1.DatabaseWriteOptions{
+			SafetyLevel: &dbSafetyLevelCommitted,
+		},
 	}
 	var err error
 	updatedDefs := map[*ResultDef]bool{}
 	for i := range metrics {
-		metric := metrics[i]
-		defName := metric.Name()
-		//  t := metric.Type()
-		//  if t == telegraf.Counter {
-		//      counters and gauges are seperate metrics, use separate resultdef to avoid timestamp merges
-		//	defName += counterSuffix
-		//  }
-		resultDef, ok := c.ResultDefs[defName]
-		if !ok {
-			log.Printf("D! Creating result def %s", defName)
-			resultDef = newResultDef(defName, &p.MetricDefs)
-			c.ResultDefs[defName] = resultDef
-			updatedDefs[resultDef] = true
-		}
-		if !resultDef.Enabled {
-			continue
-		}
-		if _, ok = updatedDefs[resultDef]; ok {
-			updateResultDef(resultDef, metric)
-		}
-		ds, rs := p.processMetric(c, resultDef, metric)
-		if rs != nil {
-			dbw.ResultSets = append(dbw.ResultSets, *rs)
-		}
-		for j := range ds {
-			dbw.DimensionSets = append(dbw.DimensionSets, *ds[j])
-		}
+		p.addMetric(c, dbw, updatedDefs, metrics[i])
 	}
 	if len(updatedDefs) > 0 {
 		dsList, rsList := p.processResultDefs(c, updatedDefs)
@@ -65,6 +46,7 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 		}
 	}
 	if len(dbw.ResultSets) > 0 || len(dbw.DimensionSets) > 0 {
+		// log.Printf("D! write dims: %d, res: %d", len(dbw.ResultSets), len(dbw.ResultSets))
 		if err = c.Client.WriteDB(ctx, dbw); err != nil {
 			log.Printf("D! result dbwrite error %s", err.Error())
 			return err
@@ -73,13 +55,50 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	return nil
 }
 
+func (p *Processor) addMetric(c *SessionClient, dbw *xv1.DatabaseWrite, updatedDefs map[*ResultDef]bool, metric telegraf.Metric) {
+	name := metric.Name()
+	//  t := metric.Type()
+	//  if t == telegraf.Counter {
+	//      counters and gauges are seperate metrics, use separate resultdef to avoid timestamp merges
+	//	name += counterSuffix
+	//  }
+	resultDef, ok := c.ResultDefs[name]
+	if !ok {
+		log.Printf("D! Creating result def %s", name)
+		resultDef = newResultDef(name, &p.MetricDefs)
+		c.ResultDefs[name] = resultDef
+		if !p.AddNewMetrics {
+			if len(resultDef.ResFacts) == 0 {
+				return
+			}
+		}
+		updatedDefs[resultDef] = true
+	}
+	if !resultDef.Enabled {
+		return
+	}
+	if p.AddNewMetrics {
+		if _, ok = updatedDefs[resultDef]; ok {
+			updateResultDef(resultDef, metric)
+		}
+	}
+	ds, rs := p.processMetric(c, resultDef, metric)
+	if rs != nil {
+		dbw.ResultSets = append(dbw.ResultSets, *rs)
+	}
+	for j := range ds {
+		dbw.DimensionSets = append(dbw.DimensionSets, *ds[j])
+	}
+}
+
 func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegraf.Metric) ([]*xv1.DimensionSetWrite, *xv1.ResultSetWrite) {
 	var ds []*xv1.DimensionSetWrite
+	maxCols := 2 + len(metric.Fields())
 	rs := &xv1.ResultSetWrite{
-		Name: r.Name,
+		Name:    r.Name,
+		Columns: make([]string, 0, maxCols),
 	}
-	var values []interface{}
-
+	values := make([]interface{}, 0, maxCols)
 	rs.Columns = append(rs.Columns, timestampName)
 	values = append(values, metric.Time())
 
@@ -136,9 +155,19 @@ func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegra
 		rs.Columns = append(rs.Columns, "test")
 		values = append(values, c.TestKey)
 	}
-	for c, v := range metric.Fields() {
-		rs.Columns = append(rs.Columns, c)
-		values = append(values, v)
+	if r.RemapResFacts {
+		for c, v := range metric.Fields() {
+			c = strings.ToLower(c)
+			if resFact, ok := r.ResFacts[c]; ok {
+				rs.Columns = append(rs.Columns, resFact.Name)
+				values = append(values, v)
+			}
+		}
+	} else {
+		for c, v := range metric.Fields() {
+			rs.Columns = append(rs.Columns, c)
+			values = append(values, v)
+		}
 	}
 	rs.Rows = append(rs.Rows, values)
 	return ds, rs
@@ -175,6 +204,7 @@ func (p *Processor) processResultDefs(c *SessionClient, defs map[*ResultDef]bool
 		rs := xv1.ResultSet{
 			Name:          r.Name,
 			DimensionSets: dimSetNames,
+			Facts:         make([]xv1.FieldDefinition, 0, len(r.ResFacts)),
 		}
 		if len(dimSetNames) > 0 {
 			rs.PrimaryDimensionSet = &dimSetNames[0]
