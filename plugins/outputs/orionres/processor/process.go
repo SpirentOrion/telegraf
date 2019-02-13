@@ -37,7 +37,7 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 		p.addMetric(c, testKey, dbw, updatedDefs, metrics[i])
 	}
 	if len(updatedDefs) > 0 {
-		dsList, rsList := p.processResultDefs(c, testKey, updatedDefs)
+		dsList, rsList := p.processResultDefs(c, updatedDefs)
 		log.Printf("D! updating %d dim & %d res sets", len(dsList), len(rsList))
 		err := c.Client.UpdateDB(ctx, dsList, rsList)
 		if err != nil {
@@ -174,13 +174,13 @@ func (p *Processor) processMetric(c *SessionClient, testKey string, r *ResultDef
 	return ds, rs
 }
 
-func (p *Processor) processResultDefs(c *SessionClient, testKey string, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
+func (p *Processor) processResultDefs(c *SessionClient, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
 	var dsList []xv1.DimensionSet
 	rsList := make([]xv1.ResultSet, 0, len(defs))
 	dimNames := make(map[string]bool)
 	for r := range defs {
 		var dimSetNames []string
-		if len(testKey) > 0 {
+		if r.TestDim {
 			dimSetNames = append(dimSetNames, "test")
 		}
 		for _, d := range r.Dims {
@@ -207,8 +207,8 @@ func (p *Processor) processResultDefs(c *SessionClient, testKey string, defs map
 			DimensionSets: dimSetNames,
 			Facts:         make([]xv1.FieldDefinition, 0, len(r.ResFacts)),
 		}
-		if len(dimSetNames) > 0 {
-			rs.PrimaryDimensionSet = &dimSetNames[0]
+		if len(r.PrimaryDimensionSet) > 0 {
+			rs.PrimaryDimensionSet = &r.PrimaryDimensionSet
 		}
 		for _, v := range r.ResFacts {
 			f := xv1.FieldDefinition{

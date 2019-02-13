@@ -14,13 +14,15 @@ type ResultDefDim struct {
 }
 
 type ResultDef struct {
-	Name              string
-	MetricServiceName string
-	Enabled           bool
-	RemapResFacts     bool
-	Dims              []*ResultDefDim
-	DimAttribs        map[string]string
-	ResFacts          map[string]*info.ResSetFact
+	Name                string
+	MetricServiceName   string
+	Enabled             bool
+	RemapResFacts       bool
+	TestDim             bool
+	PrimaryDimensionSet string
+	Dims                []*ResultDefDim
+	DimAttribs          map[string]string
+	ResFacts            map[string]*info.ResSetFact
 }
 
 func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
@@ -39,8 +41,13 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 	}
 
 	dimSets := make([]*ResultDefDim, 0, len(res.DimensionSets))
+	testDim := false
 	for _, d := range res.DimensionSets {
 		log.Printf("D! adding dimension %s", d)
+		if d == "test" {
+			testDim = true
+			continue
+		}
 		dim, ok := setDefs.Dim[d]
 		if !ok {
 			log.Printf("E! dimension %s not found", d)
@@ -83,13 +90,15 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 		resFacts[f.Name] = f
 	}
 	return &ResultDef{
-		Name:              res.Name,
-		MetricServiceName: res.MetricsServiceName(),
-		Dims:              dimSets,
-		DimAttribs:        dimAttribs,
-		RemapResFacts:     res.MetricsService.RemapFacts,
-		ResFacts:          resFacts,
-		Enabled:           true,
+		Name:                res.Name,
+		MetricServiceName:   res.MetricsServiceName(),
+		Dims:                dimSets,
+		DimAttribs:          dimAttribs,
+		RemapResFacts:       res.MetricsService.RemapFacts,
+		ResFacts:            resFacts,
+		Enabled:             true,
+		TestDim:             testDim,
+		PrimaryDimensionSet: res.PrimaryDimensionSet,
 	}
 }
 
