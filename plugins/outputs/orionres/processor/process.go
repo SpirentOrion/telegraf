@@ -24,6 +24,7 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	if c == nil {
 		return nil
 	}
+	testKey := c.TestKey()
 	dbw := &xv1.DatabaseWrite{
 		ResultSets: make([]xv1.ResultSetWrite, 0, len(metrics)),
 		Options: xv1.DatabaseWriteOptions{
@@ -33,10 +34,10 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	var err error
 	updatedDefs := map[*ResultDef]bool{}
 	for i := range metrics {
-		p.addMetric(c, dbw, updatedDefs, metrics[i])
+		p.addMetric(c, testKey, dbw, updatedDefs, metrics[i])
 	}
 	if len(updatedDefs) > 0 {
-		dsList, rsList := p.processResultDefs(c, updatedDefs)
+		dsList, rsList := p.processResultDefs(c, testKey, updatedDefs)
 		log.Printf("D! updating %d dim & %d res sets", len(dsList), len(rsList))
 		err := c.Client.UpdateDB(ctx, dsList, rsList)
 		if err != nil {
@@ -55,18 +56,18 @@ func (p *Processor) Process(ctx context.Context, metrics []telegraf.Metric) erro
 	return nil
 }
 
-func (p *Processor) addMetric(c *SessionClient, dbw *xv1.DatabaseWrite, updatedDefs map[*ResultDef]bool, metric telegraf.Metric) {
+func (p *Processor) addMetric(c *SessionClient, testKey string, dbw *xv1.DatabaseWrite, updatedDefs map[*ResultDef]bool, metric telegraf.Metric) {
 	name := metric.Name()
 	//  t := metric.Type()
 	//  if t == telegraf.Counter {
 	//      counters and gauges are seperate metrics, use separate resultdef to avoid timestamp merges
 	//	name += counterSuffix
 	//  }
-	resultDef, ok := c.ResultDefs[name]
+	resultDef, ok := c.resultDefs[name]
 	if !ok {
 		log.Printf("D! Creating result def %s", name)
 		resultDef = newResultDef(name, &p.MetricDefs)
-		c.ResultDefs[name] = resultDef
+		c.resultDefs[name] = resultDef
 		if !p.AddNewMetrics {
 			if len(resultDef.ResFacts) == 0 {
 				return
@@ -82,7 +83,7 @@ func (p *Processor) addMetric(c *SessionClient, dbw *xv1.DatabaseWrite, updatedD
 			updateResultDef(resultDef, metric)
 		}
 	}
-	ds, rs := p.processMetric(c, resultDef, metric)
+	ds, rs := p.processMetric(c, testKey, resultDef, metric)
 	if rs != nil {
 		dbw.ResultSets = append(dbw.ResultSets, *rs)
 	}
@@ -91,7 +92,7 @@ func (p *Processor) addMetric(c *SessionClient, dbw *xv1.DatabaseWrite, updatedD
 	}
 }
 
-func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegraf.Metric) ([]*xv1.DimensionSetWrite, *xv1.ResultSetWrite) {
+func (p *Processor) processMetric(c *SessionClient, testKey string, r *ResultDef, metric telegraf.Metric) ([]*xv1.DimensionSetWrite, *xv1.ResultSetWrite) {
 	var ds []*xv1.DimensionSetWrite
 	maxCols := 2 + len(metric.Fields())
 	rs := &xv1.ResultSetWrite{
@@ -151,9 +152,9 @@ func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegra
 		rs.Columns = append(rs.Columns, dimName)
 		values = append(values, dimObj.Key)
 	}
-	if len(c.TestKey) > 0 {
+	if len(testKey) > 0 {
 		rs.Columns = append(rs.Columns, "test")
-		values = append(values, c.TestKey)
+		values = append(values, testKey)
 	}
 	if r.RemapResFacts {
 		for c, v := range metric.Fields() {
@@ -173,13 +174,13 @@ func (p *Processor) processMetric(c *SessionClient, r *ResultDef, metric telegra
 	return ds, rs
 }
 
-func (p *Processor) processResultDefs(c *SessionClient, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
+func (p *Processor) processResultDefs(c *SessionClient, testKey string, defs map[*ResultDef]bool) ([]xv1.DimensionSet, []xv1.ResultSet) {
 	var dsList []xv1.DimensionSet
 	rsList := make([]xv1.ResultSet, 0, len(defs))
 	dimNames := make(map[string]bool)
 	for r := range defs {
 		var dimSetNames []string
-		if len(c.TestKey) > 0 {
+		if len(testKey) > 0 {
 			dimSetNames = append(dimSetNames, "test")
 		}
 		for _, d := range r.Dims {

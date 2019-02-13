@@ -44,8 +44,8 @@ func newMockClient() *SessionClient {
 	}
 	return &SessionClient{
 		Client:     mockClient,
-		ResultDefs: make(map[string]*ResultDef),
-		DimStores:  make(map[string]*DimStore),
+		resultDefs: make(map[string]*ResultDef),
+		dimStores:  make(map[string]*DimStore),
 	}
 }
 
@@ -61,7 +61,7 @@ func TestProcessResultDef(t *testing.T) {
 	client.reset()
 	err := m.Process(ctx, tm)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(m.Client().ResultDefs))
+	assert.Equal(t, 1, len(m.Client().resultDefs))
 	assert.Equal(t, 1, len(client.params.rs))
 	assert.Equal(t, 1, len(client.params.dbw.ResultSets))
 }
@@ -86,8 +86,8 @@ func TestSetDefProcessResultDef(t *testing.T) {
 	client.reset()
 	err = m.Process(ctx, tm)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(m.Client().ResultDefs))
-	r, ok := m.Client().ResultDefs["test1"]
+	assert.Equal(t, 1, len(m.Client().resultDefs))
+	r, ok := m.Client().resultDefs["test1"]
 	assert.Equal(t, true, ok)
 	assert.Equal(t, 1, len(r.Dims))
 
