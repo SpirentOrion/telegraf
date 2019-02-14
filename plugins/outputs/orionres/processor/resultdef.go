@@ -32,11 +32,13 @@ func newResultDef(defName string, setDefs *info.MetricDefs) *ResultDef {
 	res, ok := setDefs.MetricsServiceRes[defName]
 	if !ok {
 		return &ResultDef{
-			Name:              defName,
-			MetricServiceName: defName,
-			Enabled:           true,
-			DimAttribs:        dimAttribs,
-			ResFacts:          resFacts,
+			Name:                defName,
+			MetricServiceName:   defName,
+			Enabled:             true,
+			DimAttribs:          dimAttribs,
+			ResFacts:            resFacts,
+			TestDim:             true,
+			PrimaryDimensionSet: "test",
 		}
 	}
 

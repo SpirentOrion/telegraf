@@ -117,7 +117,7 @@ func (r *sessionResource) Update(req *http.Request, id string, value interface{}
 	}
 
 	c.SetTestKey(s.TestKey)
-	return http.StatusNoContent, nil
+	return http.StatusOK, *newSession(c)
 }
 
 func (r *sessionResource) Action(req *http.Request, id string, action string) (int, interface{}) {
