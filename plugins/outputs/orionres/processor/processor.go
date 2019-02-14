@@ -53,6 +53,7 @@ func NewClient(url, dbId, dbName, testKey string) (*SessionClient, error) {
 		Client:     client.New(c, db.Id, db.Name),
 		testKey:    testKey,
 		DbId:       db.Id,
+		Url:        url,
 		resultDefs: make(map[string]*ResultDef),
 		dimStores:  make(map[string]*DimStore),
 	}, nil

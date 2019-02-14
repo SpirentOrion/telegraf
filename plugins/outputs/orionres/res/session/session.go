@@ -107,15 +107,14 @@ func (r *sessionResource) Delete(req *http.Request, id string) (int, interface{}
 }
 
 func (r *sessionResource) Update(req *http.Request, id string, value interface{}) (int, interface{}) {
-	s := value.(*Session)
+	s, ok := value.(*Session)
+	if !ok {
+		return http.StatusBadRequest, nil
+	}
 	c := r.processor.Client()
 	if c == nil || c.DbId != id {
 		return http.StatusNotFound, nil
 	}
-	if len(s.Url) > 0 && c.Url != s.Url {
-		return http.StatusNotFound, nil
-	}
-
 	c.SetTestKey(s.TestKey)
 	return http.StatusOK, *newSession(c)
 }
