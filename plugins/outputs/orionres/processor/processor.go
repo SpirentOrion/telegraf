@@ -11,12 +11,14 @@ import (
 
 // Client session definition used to write into an orion results database
 type SessionClient struct {
-	Client     client.Client
-	TestKey    string
-	DbId       string
-	Url        string
-	ResultDefs map[string]*ResultDef
-	DimStores  map[string]*DimStore
+	Client client.Client
+	DbId   string
+	Url    string
+
+	sync.RWMutex
+	testKey    string
+	resultDefs map[string]*ResultDef
+	dimStores  map[string]*DimStore
 }
 
 type Processor struct {
@@ -49,10 +51,11 @@ func NewClient(url, dbId, dbName, testKey string) (*SessionClient, error) {
 	}
 	return &SessionClient{
 		Client:     client.New(c, db.Id, db.Name),
-		TestKey:    testKey,
+		testKey:    testKey,
 		DbId:       db.Id,
-		ResultDefs: make(map[string]*ResultDef),
-		DimStores:  make(map[string]*DimStore),
+		Url:        url,
+		resultDefs: make(map[string]*ResultDef),
+		dimStores:  make(map[string]*DimStore),
 	}, nil
 }
 
@@ -69,10 +72,22 @@ func (p *Processor) Client() *SessionClient {
 }
 
 func (c *SessionClient) dimStore(dimName string) *DimStore {
-	if s, ok := c.DimStores[dimName]; ok {
+	if s, ok := c.dimStores[dimName]; ok {
 		return s
 	}
 	s := NewDimStore()
-	c.DimStores[dimName] = s
+	c.dimStores[dimName] = s
 	return s
+}
+
+func (c *SessionClient) SetTestKey(testKey string) {
+	c.Lock()
+	defer c.Unlock()
+	c.testKey = testKey
+}
+
+func (c *SessionClient) TestKey() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.testKey
 }

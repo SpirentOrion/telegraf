@@ -28,7 +28,7 @@ func newSession(c *processor.SessionClient) *Session {
 	return &Session{
 		DbId:    c.DbId,
 		Url:     c.Url,
-		TestKey: c.TestKey,
+		TestKey: c.TestKey(),
 	}
 }
 
@@ -107,7 +107,16 @@ func (r *sessionResource) Delete(req *http.Request, id string) (int, interface{}
 }
 
 func (r *sessionResource) Update(req *http.Request, id string, value interface{}) (int, interface{}) {
-	return http.StatusNotFound, nil
+	s, ok := value.(*Session)
+	if !ok {
+		return http.StatusBadRequest, nil
+	}
+	c := r.processor.Client()
+	if c == nil || c.DbId != id {
+		return http.StatusNotFound, nil
+	}
+	c.SetTestKey(s.TestKey)
+	return http.StatusOK, *newSession(c)
 }
 
 func (r *sessionResource) Action(req *http.Request, id string, action string) (int, interface{}) {
