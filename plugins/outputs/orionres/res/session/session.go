@@ -19,7 +19,7 @@ var errorDefs = map[string]string{
 
 type Session struct {
 	XMLName xml.Name `json:"-" xml:"session"`
-	DbId    string   `json:"db_id", xml:"db_id"`
+	DbId    string   `json:"db_id" xml:"db_id"`
 	Url     string   `json:"url,omitempty" xml:"url,omitempty"`
 	TestKey string   `json:"test_key,omitempty" xml:"test_key,omitempty"`
 }
