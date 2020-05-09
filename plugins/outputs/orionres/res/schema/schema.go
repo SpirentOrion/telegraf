@@ -53,33 +53,28 @@ func (r *schemaResource) Id(value interface{}) string {
 
 func (r *schemaResource) List(req *http.Request) (int, interface{}) {
 	// Get any name filters specified (this allows for comma delimited
-	// lists and it allows a filter key to be specified more than once)
+	// lists and it allows a the name key to be specified more than once)
 	var nameFilters []string
 	for _, qpFilter := range req.URL.Query()["name"] {
 		nameFilters = append(nameFilters, strings.Split(qpFilter, ",")...)
 	}
 
-	// List the ResSet objects - limited to the specified names if filters have been
-	// specified (all name filters specified must match for the request to succeed)
+	// Get a list of schema definitions
+	var responseBody interface{}
+	var nonMatchedFilters []string
 	if r.schemaType == info.SetTypeRes {
-		resSets, nonMatchedFilters := r.listResSet(nameFilters)
-		if len(nonMatchedFilters) > 0 {
-			err := fmt.Errorf("The following name filter(s) did not match anything: %s",
-				strings.Join(nonMatchedFilters, ", "))
-			return http.StatusBadRequest, luddite.NewError(errorDefs, EcodeLookupFailure, err)
-		}
-		return http.StatusOK, resSets
+		responseBody, nonMatchedFilters = r.listResSet(nameFilters)
+	} else {
+		responseBody, nonMatchedFilters = r.listDimSet(nameFilters)
 	}
 
-	// List the DimSet objects - limited to the specified names if filters have been
-	// specified (all name filters specified must match for the request to succeed)
-	dimSets, nonMatchedFilters := r.listDimSet(nameFilters)
+	// Report an error if any filters were specified but did not match a schmea
 	if len(nonMatchedFilters) > 0 {
 		err := fmt.Errorf("The following name filter(s) did not match anything: %s",
 			strings.Join(nonMatchedFilters, ", "))
 		return http.StatusBadRequest, luddite.NewError(errorDefs, EcodeLookupFailure, err)
 	}
-	return http.StatusOK, dimSets
+	return http.StatusOK, responseBody
 }
 
 func (r *schemaResource) Count(req *http.Request) (int, interface{}) {
@@ -87,21 +82,21 @@ func (r *schemaResource) Count(req *http.Request) (int, interface{}) {
 }
 
 func (r *schemaResource) Get(req *http.Request, name string) (int, interface{}) {
-	// Attempt to get the requested ResSet definition
+	// Attempt to lookup the specified schema definition
+	var responseBody interface{}
 	if r.schemaType == info.SetTypeRes {
-		resSets := r.processor.MetricDefs.Res
-		if resSet, ok := resSets[name]; ok {
-			return http.StatusOK, resSet
+		if resSet, ok := r.processor.MetricDefs.Res[name]; ok {
+			responseBody = resSet
 		}
-		return http.StatusNotFound, nil
+	} else if dimSet, ok := r.processor.MetricDefs.Dim[name]; ok {
+		responseBody = dimSet
 	}
 
-	// Attempt to get the requested DimSet definition
-	dimSets := r.processor.MetricDefs.Dim
-	if dimSet, ok := dimSets[name]; ok {
-		return http.StatusOK, dimSet
+	// Stop here if the definition could not be found
+	if responseBody == nil {
+		return http.StatusNotFound, nil
 	}
-	return http.StatusNotFound, nil
+	return http.StatusOK, responseBody
 }
 
 func (r *schemaResource) Create(req *http.Request, value interface{}) (int, interface{}) {
