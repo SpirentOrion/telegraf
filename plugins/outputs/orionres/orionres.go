@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 
+	"github.com/SpirentOrion/metrics-service/pkg/metrics/info"
+
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/outputs"
 	"github.com/influxdata/telegraf/plugins/outputs/orionres/processor"
+	"github.com/influxdata/telegraf/plugins/outputs/orionres/res/schema"
 	"github.com/influxdata/telegraf/plugins/outputs/orionres/res/session"
 	"github.com/influxdata/telegraf/spirent/service"
 )
@@ -88,5 +91,8 @@ func (m *OrionRes) loadMetricDefs() error {
 
 func (m *OrionRes) initResources() {
 	s := service.Service()
-	s.Service.AddCollectionResource("/telegraf/output/orionres/sessions", session.NewResource(m.Processor))
+	baseUrl := "/telegraf/output/orionres/"
+	s.Service.AddCollectionResource(baseUrl+"sessions", session.NewResource(m.Processor))
+	s.Service.AddCollectionResource(baseUrl+"schemas/dim-sets", schema.NewResource(info.SetTypeDim, m.Processor))
+	s.Service.AddCollectionResource(baseUrl+"schemas/res-sets", schema.NewResource(info.SetTypeRes, m.Processor))
 }
